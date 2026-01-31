@@ -1385,7 +1385,7 @@ def create_text_chat(text: str, end_session: bool = False) -> ChatMessage:
 # ASI-1 client for itinerary planning
 client = OpenAI(
     base_url='https://api.asi1.ai/v1',
-    api_key='sk_71e926259b764dc2ab5c451195d40bcf81dc5a3057c74071b2e868c65528a688',
+    api_key=
 )
 
 agent = Agent()
