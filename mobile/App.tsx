@@ -1,0 +1,27 @@
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { WelcomeScreen } from './src/screens/WelcomeScreen';
+import { CitySelectionScreen } from './src/screens/CitySelectionScreen';
+import { BudgetScreen } from './src/screens/BudgetScreen';
+import { DatePickerScreen } from './src/screens/DatePickerScreen';
+
+const Stack = createNativeStackNavigator();
+
+export default function App() {
+    return (
+        <NavigationContainer>
+            <Stack.Navigator
+                initialRouteName="Welcome"
+                screenOptions={{
+                    headerShown: false,
+                }}
+            >
+                <Stack.Screen name="Welcome" component={WelcomeScreen} />
+                <Stack.Screen name="CitySelection" component={CitySelectionScreen} />
+                <Stack.Screen name="Budget" component={BudgetScreen} />
+                <Stack.Screen name="DatePicker" component={DatePickerScreen} />
+            </Stack.Navigator>
+        </NavigationContainer>
+    );
+}
