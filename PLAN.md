@@ -1355,3 +1355,111 @@ async def handle_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
     pass
 
 agent.include(protocol, publish_manifest=True)
+
+
+________________________________________________
+from datetime import datetime
+from uuid import uuid4
+
+from openai import OpenAI
+from uagents import Context, Protocol, Agent
+from uagents_core.contrib.protocols.chat import (
+    ChatAcknowledgement,
+    ChatMessage,
+    EndSessionContent,
+    StartSessionContent,
+    TextContent,
+    chat_protocol_spec,
+)
+
+##
+### Itinerary Planner Agent for Metropolis
+##
+
+def create_text_chat(text: str, end_session: bool = False) -> ChatMessage:
+    content = [TextContent(type="text", text=text)]
+    if end_session:
+        content.append(EndSessionContent(type="end-session"))
+    return ChatMessage(timestamp=datetime.utcnow(), msg_id=uuid4(), content=content)
+
+# ASI-1 client for itinerary planning
+client = OpenAI(
+    base_url='https://api.asi1.ai/v1',
+    api_key='sk_71e926259b764dc2ab5c451195d40bcf81dc5a3057c74071b2e868c65528a688',
+)
+
+agent = Agent()
+protocol = Protocol(spec=chat_protocol_spec)
+
+@protocol.on_message(ChatMessage)
+async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
+    await ctx.send(
+        sender,
+        ChatAcknowledgement(timestamp=datetime.now(), acknowledged_msg_id=msg.msg_id),
+    )
+
+    # Greet if session starts
+    if any(isinstance(item, StartSessionContent) for item in msg.content):
+        await ctx.send(
+            sender,
+            create_text_chat("Hi! I'm your Itinerary Planner. Send me a list of events and I'll create an optimized schedule for your day!", end_session=False),
+        )
+
+    text = msg.text()
+    if not text:
+        return
+
+    ctx.logger.info(f"Planning itinerary for: {text}")
+
+    try:
+        r = client.chat.completions.create(
+            model="asi1-mini",
+            messages=[
+                {"role": "system", "content": """You are an expert itinerary planner for city exploration. Given events and preferences, create an optimized day schedule.
+
+Rules:
+1. Consider realistic travel times between venues (15-30 min)
+2. Include meal breaks (lunch 12-1pm, dinner 6-7pm)
+3. Don't overlap events
+4. Respect the user's budget if mentioned
+5. Start day around 9-10am, end by 10-11pm
+
+Format your response clearly:
+
+📅 YOUR ITINERARY FOR [CITY]
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+🕘 9:00 AM - [EVENT NAME]
+   📍 [Location]
+   💰 $[Cost]
+   ⏱️ [Duration]
+   
+🕐 [NEXT TIME] - [NEXT EVENT]
+   ...
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+💵 TOTAL ESTIMATED COST: $XX
+🚶 TOTAL TRAVEL TIME: XX min
+✨ TIPS: [Any helpful suggestions]
+
+If no events are provided, ask the user for: city, date, events or preferences, and budget."""},
+                {"role": "user", "content": text},
+            ],
+            max_tokens=1500,
+        )
+
+        response = str(r.choices[0].message.content)
+        ctx.logger.info("Itinerary created successfully")
+        
+    except Exception as e:
+        ctx.logger.exception('Error creating itinerary')
+        response = f"Sorry, I encountered an error while planning your itinerary: {e}"
+
+    await ctx.send(sender, create_text_chat(response, end_session=True))
+
+
+@protocol.on_message(ChatAcknowledgement)
+async def handle_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
+    pass
+
+agent.include(protocol, publish_manifest=True)
