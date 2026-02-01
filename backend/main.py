@@ -324,6 +324,25 @@ async def export_pdf(itinerary_id: str):
     city = data["city"]
     itinerary = data["itinerary"]
 
+    # Helper to sanitize text for PDF (replace Unicode chars not supported by Helvetica)
+    def sanitize_text(text: str) -> str:
+        if not text:
+            return text
+        replacements = {
+            "'": "'", "'": "'", """: '"', """: '"',
+            "–": "-", "—": "-", "…": "...", "•": "-",
+            "é": "e", "è": "e", "ê": "e", "ë": "e",
+            "à": "a", "â": "a", "ä": "a",
+            "ù": "u", "û": "u", "ü": "u",
+            "ô": "o", "ö": "o", "ò": "o",
+            "î": "i", "ï": "i", "ì": "i",
+            "ç": "c", "ñ": "n",
+        }
+        for orig, repl in replacements.items():
+            text = text.replace(orig, repl)
+        # Remove any remaining non-latin1 characters
+        return text.encode('latin-1', errors='replace').decode('latin-1')
+
     # Create PDF
     pdf = FPDF()
     pdf.add_page()
@@ -331,7 +350,7 @@ async def export_pdf(itinerary_id: str):
 
     # Title
     pdf.set_font("Helvetica", "B", 24)
-    pdf.cell(0, 15, f"Your {city} Itinerary", ln=True, align="C")
+    pdf.cell(0, 15, sanitize_text(f"Your {city} Itinerary"), ln=True, align="C")
 
     # Date range
     pdf.set_font("Helvetica", "", 12)
@@ -366,14 +385,14 @@ async def export_pdf(itinerary_id: str):
 
         # Event details
         pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(0, 8, f"{item.start_time} - {item.end_time}  |  {item.title}", ln=True)
+        pdf.cell(0, 8, sanitize_text(f"{item.start_time} - {item.end_time}  |  {item.title}"), ln=True)
 
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 6, f"Location: {item.location}", ln=True)
+        pdf.cell(0, 6, sanitize_text(f"Location: {item.location}"), ln=True)
 
         if item.description:
-            pdf.multi_cell(0, 5, item.description)
+            pdf.multi_cell(0, 5, sanitize_text(item.description))
 
         if item.estimated_cost > 0:
             pdf.set_font("Helvetica", "I", 10)
