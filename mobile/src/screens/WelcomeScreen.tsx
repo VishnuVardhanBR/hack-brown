@@ -82,11 +82,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-            {/* Logo placeholder at top */}
+            {/* App name at top */}
             <View style={styles.logoContainer}>
-                <View style={styles.logoPlaceholder}>
-                    <Text style={styles.logoText}>LOGO</Text>
-                </View>
+                <Text style={styles.appName}>OughtToSee</Text>
             </View>
 
             {/* Welcome Text with fade down animation */}
@@ -164,18 +162,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 60,
     },
-    logoPlaceholder: {
-        paddingHorizontal: 30,
-        paddingVertical: 8,
-        borderWidth: 2,
-        borderColor: colors.textPrimary,
-        borderRadius: 20,
-    },
-    logoText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: colors.textPrimary,
-        letterSpacing: 2,
+    appName: {
+        fontSize: 24,
+        fontWeight: '800',
+        color: colors.primary,
+        letterSpacing: 1,
     },
     welcomeContainer: {
         alignItems: 'flex-start',

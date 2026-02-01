@@ -28,7 +28,7 @@ interface AdditionalPreferencesScreenProps {
 }
 
 export const AdditionalPreferencesScreen: React.FC<AdditionalPreferencesScreenProps> = ({ navigation, route }) => {
-    const { city, budget, dates, selectedPreferences = [] } = route.params || {};
+    const { city, budget, date, selectedPreferences = [] } = route.params || {};
     const [preferences, setPreferences] = useState('');
 
     // Animation values
@@ -73,21 +73,21 @@ export const AdditionalPreferencesScreen: React.FC<AdditionalPreferencesScreenPr
             .filter(Boolean)
             .join('. ');
 
-        navigation.navigate('Loading', { 
-            city, 
-            budget, 
-            dates, 
-            preferences: combinedPreferences 
+        navigation.navigate('Loading', {
+            city,
+            budget,
+            date,
+            preferences: combinedPreferences
         });
     };
 
     const handleSkip = () => {
         // Navigate with only the selected preferences from previous screen
-        navigation.navigate('Loading', { 
-            city, 
-            budget, 
-            dates, 
-            preferences: selectedPreferences || '' 
+        navigation.navigate('Loading', {
+            city,
+            budget,
+            date,
+            preferences: selectedPreferences || ''
         });
     };
 

@@ -5,8 +5,17 @@ from typing import List, Optional
 from datetime import datetime
 from dotenv import load_dotenv
 import uuid
+import logging
 
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)s | %(message)s',
+    datefmt='%H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 from services import SerpAPIService, GeminiService, CalendarService, GeocodingService, DirectionsService
 from config import get_settings
@@ -94,17 +103,34 @@ itineraries_store = {}
 @app.post("/api/generate-itinerary", response_model=ItineraryResponse)
 async def generate_itinerary(request: SearchRequest):
     """Main endpoint that orchestrates event discovery and itinerary planning"""
+    logger.info(f"=== NEW ITINERARY REQUEST ===")
+    logger.info(f"City: {request.city}, {request.state}")
+    logger.info(f"Dates: {request.dates}")
+    logger.info(f"Budget: {request.budget}")
+    logger.info(f"Preferences: {request.preferences or 'None'}")
+
     try:
         # Step 1: Search for events using SerpAPI (searches all dates)
+        logger.info(f"Step 1: Searching events via SerpAPI...")
         events = await serpapi_service.search_events(
             request.city, request.state, request.dates,
             request.budget, request.preferences
         )
+        logger.info(f"SerpAPI returned {len(events)} events")
 
+        relaxed_search = False
+
+        # If no events found, use fallback events instead of failing
         if not events:
-            raise HTTPException(status_code=404, detail="No events found for your criteria")
+            logger.warning(f"No events found, using fallback events for {request.city}")
+            relaxed_search = True
+            events = serpapi_service._get_fallback_events(
+                request.city,
+                request.dates[0] if request.dates else ""
+            )
 
         # Step 2: Generate multi-day itinerary with Gemini
+        logger.info(f"Step 2: Generating itinerary with Gemini...")
         itinerary_data = await gemini_service.plan_itinerary(
             events=events,
             dates=request.dates,
@@ -112,6 +138,7 @@ async def generate_itinerary(request: SearchRequest):
             budget=request.budget,
             preferences=request.preferences
         )
+        logger.info(f"Gemini returned {len(itinerary_data)} itinerary items")
 
         itinerary = [ItineraryItem(**item) for item in itinerary_data]
 
@@ -128,12 +155,23 @@ async def generate_itinerary(request: SearchRequest):
 
         num_days = len(request.dates)
         day_text = "day" if num_days == 1 else f"{num_days}-day"
-        
+
+        # Modify summary if search was relaxed
+        summary = f"Your {day_text} {request.city} adventure"
+        if relaxed_search:
+            summary = f"Your {day_text} {request.city} adventure (curated suggestions)"
+
+        total_cost = sum(e.estimated_cost for e in itinerary)
+        logger.info(f"=== ITINERARY COMPLETE ===")
+        logger.info(f"Events: {len(itinerary)}, Total Cost: ${total_cost:.2f}")
+        for i, e in enumerate(itinerary, 1):
+            logger.info(f"  {i}. {e.title} ({e.start_time}-{e.end_time}) - ${e.estimated_cost:.2f}")
+
         return ItineraryResponse(
             itinerary_id=itinerary_id,
             events=itinerary,
-            total_cost=sum(e.estimated_cost for e in itinerary),
-            summary=f"Your {day_text} {request.city} adventure",
+            total_cost=total_cost,
+            summary=summary,
             dates=request.dates,
             city=request.city
         )
@@ -141,6 +179,7 @@ async def generate_itinerary(request: SearchRequest):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error generating itinerary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/recalculate-itinerary", response_model=ItineraryResponse)
@@ -173,12 +212,32 @@ async def recalculate_itinerary(request: RecalculateRequest):
             city, state, dates, budget, combined_preferences
         )
 
+        relaxed_search = False
+        
+        # If no events found, use fallback events instead of failing
         if not events:
-            raise HTTPException(status_code=404, detail="No events found for your criteria")
+            print(f"[API] No events found for recalculation, using fallback events for {city}")
+            relaxed_search = True
+            events = serpapi_service._get_fallback_events(
+                city, 
+                dates[0] if dates else ""
+            )
 
         # Filter out excluded events by title
         if request.excluded_events:
             events = [e for e in events if e.get("title", "") not in request.excluded_events]
+        
+        # If filtering excluded events left us with nothing, use fallback events
+        if not events:
+            print(f"[API] No events remaining after exclusions, using fallback events for {city}")
+            relaxed_search = True
+            events = serpapi_service._get_fallback_events(
+                city, 
+                dates[0] if dates else ""
+            )
+            # Filter excluded from fallback too
+            if request.excluded_events:
+                events = [e for e in events if e.get("title", "") not in request.excluded_events]
 
         # Generate new itinerary with Gemini
         itinerary_data = await gemini_service.plan_itinerary(
@@ -248,6 +307,95 @@ async def export_ics(itinerary_id: str):
     return Response(
         content=ics_content,
         media_type="text/calendar",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@app.get("/api/export-pdf/{itinerary_id}")
+async def export_pdf(itinerary_id: str):
+    """Export itinerary as PDF file"""
+    from fpdf import FPDF
+    import io
+
+    if itinerary_id not in itineraries_store:
+        raise HTTPException(status_code=404, detail="Itinerary not found")
+
+    data = itineraries_store[itinerary_id]
+    dates = data["dates"]
+    city = data["city"]
+    itinerary = data["itinerary"]
+
+    # Create PDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    # Title
+    pdf.set_font("Helvetica", "B", 24)
+    pdf.cell(0, 15, f"Your {city} Itinerary", ln=True, align="C")
+
+    # Date range
+    pdf.set_font("Helvetica", "", 12)
+    if len(dates) == 1:
+        date_text = dates[0]
+    else:
+        date_text = f"{dates[0]} to {dates[-1]}"
+    pdf.cell(0, 10, date_text, ln=True, align="C")
+    pdf.ln(10)
+
+    # Total cost
+    total_cost = sum(item.estimated_cost for item in itinerary)
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, f"Total Estimated Cost: ${total_cost:.2f}", ln=True)
+    pdf.ln(5)
+
+    # Events
+    current_date = None
+    for item in itinerary:
+        event_date = item.date or dates[0]
+
+        # Date header if new date
+        if event_date != current_date:
+            current_date = event_date
+            pdf.ln(5)
+            pdf.set_font("Helvetica", "B", 16)
+            pdf.set_fill_color(147, 112, 219)  # Purple
+            pdf.set_text_color(255, 255, 255)
+            pdf.cell(0, 10, f"  {event_date}", ln=True, fill=True)
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(3)
+
+        # Event details
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.cell(0, 8, f"{item.start_time} - {item.end_time}  |  {item.title}", ln=True)
+
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 6, f"Location: {item.location}", ln=True)
+
+        if item.description:
+            pdf.multi_cell(0, 5, item.description)
+
+        if item.estimated_cost > 0:
+            pdf.set_font("Helvetica", "I", 10)
+            pdf.cell(0, 6, f"Cost: ${item.estimated_cost:.2f}", ln=True)
+
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(5)
+
+    # Footer
+    pdf.ln(10)
+    pdf.set_font("Helvetica", "I", 10)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(0, 10, "Generated by OughtToSee", ln=True, align="C")
+
+    # Output PDF
+    pdf_content = pdf.output()
+    date_str = dates[0] if len(dates) == 1 else f"{dates[0]}_to_{dates[-1]}"
+    filename = f"oughttosee_{city}_{date_str}.pdf"
+
+    return Response(
+        content=bytes(pdf_content),
+        media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 

@@ -27,7 +27,7 @@ interface LoadingScreenProps {
 }
 
 export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route }) => {
-    const { city, budget, dates, preferences, isRecalculating } = route.params || {};
+    const { city, budget, date, preferences, isRecalculating } = route.params || {};
     const videoRef = useRef<Video>(null);
     const [isReversing, setIsReversing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -70,8 +70,11 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
             }).start();
         });
 
-        // Call API to generate itinerary
-        generateItinerary();
+        // Only call generateItinerary for new itineraries, not recalculations
+        // Recalculation is handled by ItineraryScreen which navigates here just for the loading UI
+        if (!isRecalculating) {
+            generateItinerary();
+        }
     }, []);
 
     const generateItinerary = async () => {
@@ -79,8 +82,8 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
         setIsLoading(true);
 
         try {
-            // Get dates array or use today as fallback
-            const datesArray = dates && dates.length > 0 ? dates : [new Date().toISOString().split('T')[0]];
+            // Wrap single date in array for API compatibility
+            const datesArray = date ? [date] : [new Date().toISOString().split('T')[0]];
 
             const response = await fetch(`${API_BASE_URL}/generate-itinerary`, {
                 method: 'POST',
@@ -120,9 +123,11 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
 
     const formatBudget = (budget: number): string => {
         if (!budget || budget === 0) return '$0';
-        if (budget <= 20) return '$1-$20';
-        if (budget <= 50) return '$20-$50';
-        return '$50+';
+        if (budget <= 50) return '$1-$50';
+        if (budget <= 150) return '$50-$150';
+        if (budget <= 300) return '$150-$300';
+        if (budget <= 500) return '$300-$500';
+        return '$500+';
     };
 
     const handleRetry = () => {

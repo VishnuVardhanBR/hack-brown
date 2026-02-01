@@ -2,6 +2,9 @@ from serpapi import GoogleSearch
 from typing import List, Dict, Any
 import os
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SerpAPIService:
@@ -24,7 +27,7 @@ class SerpAPIService:
         """
         # Simple query only - complex queries fail
         query = f"Events in {city}, {state}"
-        print(f"[SerpAPI] Searching: {query}")
+        logger.info(f"[SerpAPI] Searching: {query}")
 
         params = {
             "api_key": self.api_key,
@@ -40,27 +43,32 @@ class SerpAPIService:
 
             # Check for API errors
             if "error" in results:
-                print(f"[SerpAPI] API error: {results['error']}")
-                return self._get_fallback_events(city, date)
+                logger.error(f"[SerpAPI] API error: {results['error']}")
+                return self._get_fallback_events(city, dates[0] if dates else "")
 
             events = results.get("events_results", [])
-            print(f"[SerpAPI] Found {len(events)} events")
+            logger.info(f"[SerpAPI] Found {len(events)} raw events from Google")
+
+            # Log sample event titles
+            if events:
+                sample_titles = [e.get("title", "Unknown")[:50] for e in events[:5]]
+                logger.info(f"[SerpAPI] Sample events: {sample_titles}")
 
             if not events:
-                return self._get_fallback_events(city, date)
+                return self._get_fallback_events(city, dates[0] if dates else "")
 
             # Pre-filter events by budget before sending to Gemini
             filtered_events = self._filter_by_budget(events, budget)
-            print(f"[SerpAPI] After budget filter ({budget}): {len(filtered_events)} events")
+            logger.info(f"[SerpAPI] After budget filter ({budget}): {len(filtered_events)} events")
             return filtered_events
 
         except Exception as e:
-            print(f"[SerpAPI] Error: {e}")
-            return self._get_fallback_events(city, date)
+            logger.error(f"[SerpAPI] Error: {e}")
+            return self._get_fallback_events(city, dates[0] if dates else "")
 
     def _get_fallback_events(self, city: str, date: str) -> List[Dict[str, Any]]:
         """Return fallback mock events when SerpAPI fails"""
-        print(f"[SerpAPI] Using fallback events for {city}")
+        logger.warning(f"[SerpAPI] Using fallback events for {city}")
         return [
             {
                 "title": f"Local Art Gallery Opening",
@@ -100,14 +108,44 @@ class SerpAPIService:
         ]
 
     def _filter_by_budget(self, events: List[Dict], budget: str) -> List[Dict]:
-        """Filter events based on budget tier"""
+        """Filter events based on budget tier with progressive relaxation"""
+        # Budget tiers map to per-event cost limits
+        budget_limits = {
+            "$0": 0,
+            "$1-$50": 25,
+            "$50-$150": 50,
+            "$150-$300": 100,
+            "$300-$500": 150,
+            "$500+": 500
+        }
+
+        max_cost = budget_limits.get(budget, 100)
+
+        # Filter by budget
         if budget == "$0":
-            return [e for e in events if self._is_free_event(e)][:10]
-        elif budget == "$1-$20":
-            return [e for e in events if self._get_event_cost(e) <= 20][:10]
-        elif budget == "$20-$50":
-            return [e for e in events if self._get_event_cost(e) <= 50][:10]
-        return events[:10]
+            filtered = [e for e in events if self._is_free_event(e)][:20]
+        else:
+            filtered = [e for e in events if self._get_event_cost(e) <= max_cost][:20]
+
+        # If strict filtering found results, return them
+        if filtered:
+            return filtered
+
+        # Progressive fallback: try relaxed budget
+        logger.info(f"[SerpAPI] No events found for budget {budget}, relaxing criteria...")
+
+        # Try doubling the limit
+        filtered = [e for e in events if self._get_event_cost(e) <= max_cost * 2][:20]
+        if filtered:
+            logger.info(f"[SerpAPI] Relaxed budget filter: {len(filtered)} events")
+            return filtered
+
+        # Final fallback: return any events up to 20
+        if events:
+            logger.info(f"[SerpAPI] Using all available events: {len(events[:20])} events")
+            return events[:20]
+
+        return []
 
     def _is_free_event(self, event: Dict) -> bool:
         """Check if event is free"""

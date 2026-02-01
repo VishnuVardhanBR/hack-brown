@@ -3,6 +3,9 @@ from typing import List, Dict, Any
 import json
 import os
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiService:
@@ -51,54 +54,44 @@ Prioritize events that match these interests! Only include events that align wit
             event_count = "3-5 events"
         else:
             day_planning = f"Create a fun, optimized {num_days}-day plan for {city} covering these dates: {dates_str}."
-            event_count = f"3-5 events PER DAY ({num_days * 3}-{num_days * 5} total events)"
+            event_count = f"3-5 events PER DAY"
 
-        # Define budget limits for each tier
+        # Define budget limits for each tier (total budget, per-event max)
         budget_limits = {
-            "$0": (0, "ONLY include FREE events. estimated_cost must be 0 for all events."),
-            "$1-$20": (20, "Each event must cost $20 or less. Prefer free/low-cost options."),
-            "$20-$50": (50, "Each event must cost $50 or less."),
-            "$50+": (100, "Higher budget available, but still be cost-conscious.")
+            "$0": (0, 0, "ONLY include FREE events. estimated_cost must be 0 for all events. Total must be $0."),
+            "$1-$50": (50, 20, "TOTAL cost must be under $50. Each event should cost $20 or less. Prioritize FREE events."),
+            "$50-$150": (150, 40, "TOTAL cost must be under $150. Each event should cost $40 or less."),
+            "$150-$300": (300, 75, "TOTAL cost must be under $300. Each event should cost $75 or less."),
+            "$300-$500": (500, 125, "TOTAL cost must be under $500. Each event should cost $125 or less."),
+            "$500+": (1000, 250, "Higher budget available for premium experiences. Total under $1000.")
         }
-        budget_max, budget_instruction = budget_limits.get(budget, (50, "Be cost-conscious."))
+        total_max, per_event_max, budget_instruction = budget_limits.get(budget, (150, 50, "Be cost-conscious."))
 
         prompt = f"""You are an expert itinerary planner. {day_planning}
 
-BUDGET CONSTRAINT - CRITICAL:
-- User's budget tier: {budget}
-- {budget_instruction}
-- Set realistic estimated_cost values based on actual ticket prices
-- If an event is free, set estimated_cost to 0.00
-{pref_instruction}
-Available events in the city:
+ACTIVITIES TO CHOOSE FROM:
 {json.dumps(events, indent=2)}
 
-YOUR TASK:
-1. SELECT {event_count} that STRICTLY fit the budget ({budget}) and match user interests
-2. SCHEDULE them in a logical order with realistic timing
-3. Consider travel time between venues (15-30 min)
-4. Include breaks for meals if needed
-5. Start around 10am, end by 10-11pm each day
-6. Distribute events evenly across all dates: {dates_str}
-7. VERIFY each event's estimated_cost respects the budget limit
+BUDGET: ${total_max} total maximum
+{pref_instruction}
+Create a day itinerary with 3-5 activities where the TOTAL cost stays under ${total_max}.
 
-Return ONLY a JSON array with this exact structure:
+Rules:
+- Pick 3-5 activities and schedule them from 10am to 10pm
+- The SUM of all estimated_cost must be under ${total_max}
+- Use realistic costs based on ticket prices shown
+- If an event is free, set estimated_cost to 0
+
+Return a JSON array:
 [
-    {{
-        "title": "Event name",
-        "date": "YYYY-MM-DD",
-        "start_time": "HH:MM",
-        "end_time": "HH:MM",
-        "location": "Full address",
-        "description": "Brief fun description of why this is great",
-        "ticket_info": "Price info or 'Free'",
-        "estimated_cost": 0.00
-    }}
+    {{"title": "Name", "date": "{dates[0]}", "start_time": "10:00", "end_time": "12:00", "location": "Address", "description": "Fun description", "ticket_info": "Price or Free", "estimated_cost": 0.00}}
 ]
 
-IMPORTANT: Each event MUST have a "date" field set to one of these dates: {dates_str}
-Sort the events by date first, then by start_time.
+Return 3-5 events. Total cost under ${total_max}.
 """
+
+        logger.info(f"[Gemini] Sending {len(events)} events to plan {event_count}")
+        logger.debug(f"[Gemini] Prompt length: {len(prompt)} chars")
 
         try:
             # Run blocking call in thread pool to avoid blocking the event loop
@@ -107,10 +100,13 @@ Sort the events by date first, then by start_time.
                 prompt,
                 generation_config={"response_mime_type": "application/json"}
             )
-            return json.loads(response.text)
+            result = json.loads(response.text)
+            logger.info(f"[Gemini] Generated {len(result)} itinerary items")
+            return result
         except json.JSONDecodeError as e:
-            print(f"Gemini JSON parse error: {e}")
+            logger.error(f"[Gemini] JSON parse error: {e}")
+            logger.error(f"[Gemini] Raw response: {response.text[:500]}")
             raise ValueError("Failed to parse itinerary from AI response")
         except Exception as e:
-            print(f"Gemini API error: {e}")
+            logger.error(f"[Gemini] API error: {e}")
             raise

@@ -34,7 +34,7 @@ const PREFERENCE_OPTIONS = [
 ];
 
 export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation, route }) => {
-    const { city, budget, dates } = route.params || {};
+    const { city, budget, date } = route.params || {};
     const [selectedPreferences, setSelectedPreferences] = useState<string[]>([]);
 
     // Animation values
@@ -92,7 +92,7 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
         navigation.navigate('AdditionalPreferences', {
             city,
             budget,
-            dates,
+            date,
             selectedPreferences: selectedLabels
         });
     };

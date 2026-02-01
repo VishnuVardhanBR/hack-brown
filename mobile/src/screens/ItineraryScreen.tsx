@@ -118,22 +118,22 @@ export const ItineraryScreen: React.FC<ItineraryScreenProps> = ({ navigation, ro
 
     const currentTotalCost = events.reduce((sum, event) => sum + (event.estimated_cost || 0), 0);
 
-    const handleExportICS = async () => {
+    const handleExportPDF = async () => {
         try {
-            const url = `${API_BASE_URL}/export-ics/${itineraryId}`;
+            const url = `${API_BASE_URL}/export-pdf/${itineraryId}`;
             const supported = await Linking.canOpenURL(url);
 
             if (supported) {
                 await Linking.openURL(url);
             } else {
                 Alert.alert(
-                    'Export Calendar',
-                    `Download your calendar file from:\n${url}`,
+                    'Export PDF',
+                    `Download your itinerary PDF from:\n${url}`,
                     [{ text: 'OK' }]
                 );
             }
         } catch (error) {
-            Alert.alert('Error', 'Failed to export calendar');
+            Alert.alert('Error', 'Failed to export PDF');
         }
     };
 
@@ -352,10 +352,10 @@ export const ItineraryScreen: React.FC<ItineraryScreenProps> = ({ navigation, ro
 
                 <TouchableOpacity
                     style={styles.exportButton}
-                    onPress={handleExportICS}
+                    onPress={handleExportPDF}
                     activeOpacity={0.8}
                 >
-                    <Text style={styles.exportButtonText}>📅 Export to Calendar</Text>
+                    <Text style={styles.exportButtonText}>📄 Export to PDF</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -523,17 +523,21 @@ const styles = StyleSheet.create({
     eventFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
+        gap: 8,
     },
     ticketInfo: {
         fontSize: 12,
         color: colors.deepPurple,
         fontWeight: '600',
+        flex: 1,
+        flexWrap: 'wrap',
     },
     costInfo: {
         fontSize: 14,
         color: colors.primary,
         fontWeight: '700',
+        flexShrink: 0,
     },
     bottomContainer: {
         position: 'absolute',
