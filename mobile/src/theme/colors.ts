@@ -1,4 +1,4 @@
-// Metropolis Color Palette
+// OughtToSee Color Palette
 export const colors = {
     // Primary
     background: '#F9EAEC',

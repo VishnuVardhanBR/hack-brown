@@ -2,8 +2,8 @@ import 'dotenv/config';
 
 export default {
     expo: {
-        name: "Metropolis",
-        slug: "metropolis",
+        name: "OughtToSee",
+        slug: "oughttosee",
         version: "1.0.0",
         orientation: "portrait",
         icon: "./assets/icon.png",

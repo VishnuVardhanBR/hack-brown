@@ -25,10 +25,10 @@ class CalendarService:
             ICS file content as string
         """
         cal = Calendar()
-        cal.add('prodid', '-//Metropolis Itinerary//metropolis.app//')
+        cal.add('prodid', '-//OughtToSee Itinerary//oughttosee.app//')
         cal.add('version', '2.0')
         cal.add('calscale', 'GREGORIAN')
-        cal.add('x-wr-calname', f'Metropolis - {city} Itinerary')
+        cal.add('x-wr-calname', f'OughtToSee - {city} Itinerary')
 
         # Default date for events without a date field
         default_date = dates[0] if dates else datetime.now().strftime("%Y-%m-%d")

@@ -23,7 +23,7 @@ from config import get_settings
 settings = get_settings()
 
 app = FastAPI(
-    title="Metropolis API",
+    title="OughtToSee API",
     description="AI-Powered Event Discovery & Itinerary Planner",
     version="1.0.0"
 )
@@ -302,7 +302,7 @@ async def export_ics(itinerary_id: str):
     
     ics_content = calendar_service.generate_ics(itinerary_dicts, dates, data["city"])
     date_str = dates[0] if len(dates) == 1 else f"{dates[0]}_to_{dates[-1]}"
-    filename = f"metropolis_{data['city']}_{date_str}.ics"
+    filename = f"oughttosee_{data['city']}_{date_str}.ics"
 
     return Response(
         content=ics_content,
