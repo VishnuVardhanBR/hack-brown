@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -46,6 +46,8 @@ export const ItineraryScreen: React.FC<ItineraryScreenProps> = ({ navigation, ro
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(50)).current;
 
+    const [events, setEvents] = useState<ItineraryEvent[]>(itinerary);
+
     useEffect(() => {
         Animated.parallel([
             Animated.timing(fadeAnim, {
@@ -61,11 +63,17 @@ export const ItineraryScreen: React.FC<ItineraryScreenProps> = ({ navigation, ro
         ]).start();
     }, []);
 
+    const handleRemoveEvent = (indexToRemove: number) => {
+        setEvents(prevEvents => prevEvents.filter((_, index) => index !== indexToRemove));
+    };
+
+    const currentTotalCost = events.reduce((sum, event) => sum + (event.estimated_cost || 0), 0);
+
     const handleExportICS = async () => {
         try {
             const url = `${API_BASE_URL}/export-ics/${itineraryId}`;
             const supported = await Linking.canOpenURL(url);
-            
+
             if (supported) {
                 await Linking.openURL(url);
             } else {
@@ -112,12 +120,12 @@ export const ItineraryScreen: React.FC<ItineraryScreenProps> = ({ navigation, ro
                     <Text style={styles.headerDate}>{formatDate(date)}</Text>
                     <View style={styles.headerStats}>
                         <View style={styles.statItem}>
-                            <Text style={styles.statValue}>{itinerary.length}</Text>
+                            <Text style={styles.statValue}>{events.length}</Text>
                             <Text style={styles.statLabel}>Events</Text>
                         </View>
                         <View style={styles.statDivider} />
                         <View style={styles.statItem}>
-                            <Text style={styles.statValue}>${totalCost.toFixed(0)}</Text>
+                            <Text style={styles.statValue}>${currentTotalCost.toFixed(0)}</Text>
                             <Text style={styles.statLabel}>Est. Cost</Text>
                         </View>
                     </View>
@@ -139,8 +147,17 @@ export const ItineraryScreen: React.FC<ItineraryScreenProps> = ({ navigation, ro
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={styles.eventListContent}
                 >
-                    {itinerary.map((event, index) => (
+                    {events.map((event, index) => (
                         <View key={index} style={styles.eventCard}>
+                            {/* Remove Button */}
+                            <TouchableOpacity
+                                style={styles.removeButton}
+                                onPress={() => handleRemoveEvent(index)}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={styles.removeButtonText}>✕</Text>
+                            </TouchableOpacity>
+
                             <View style={styles.timeContainer}>
                                 <Text style={styles.timeText}>{event.start_time}</Text>
                                 <View style={styles.timeLine} />
@@ -270,6 +287,24 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 3,
+        position: 'relative',
+    },
+    removeButton: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: colors.border,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1,
+    },
+    removeButtonText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.textSecondary,
     },
     timeContainer: {
         alignItems: 'center',
