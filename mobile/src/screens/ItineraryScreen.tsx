@@ -84,6 +84,13 @@ export const ItineraryScreen: React.FC<ItineraryScreenProps> = ({ navigation, ro
         navigation.popToTop();
     };
 
+    const handleViewMap = () => {
+        navigation.navigate('Map', {
+            itineraryId: itineraryId,
+            city: city,
+        });
+    };
+
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
         return date.toLocaleDateString('en-US', {
@@ -160,6 +167,14 @@ export const ItineraryScreen: React.FC<ItineraryScreenProps> = ({ navigation, ro
 
             {/* Bottom Buttons */}
             <View style={styles.bottomContainer}>
+                <TouchableOpacity
+                    style={styles.mapButton}
+                    onPress={handleViewMap}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.mapButtonText}>🗺️ View Route on Map</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                     style={styles.exportButton}
                     onPress={handleExportICS}
@@ -319,6 +334,23 @@ const styles = StyleSheet.create({
         paddingBottom: 40,
         borderTopWidth: 1,
         borderTopColor: colors.border,
+    },
+    mapButton: {
+        backgroundColor: colors.deepPurple,
+        paddingVertical: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+        marginBottom: 12,
+        shadowColor: colors.darkPurple,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    mapButtonText: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: colors.textLight,
     },
     exportButton: {
         backgroundColor: colors.primary,

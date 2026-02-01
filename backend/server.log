@@ -1,0 +1,9 @@
+INFO:     Started server process [85170]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+INFO:     127.0.0.1:49295 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     192.168.0.41:49297 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     192.168.0.41:49582 - "POST /api/generate-itinerary HTTP/1.1" 404 Not Found
+INFO:     192.168.0.41:49593 - "POST /api/generate-itinerary HTTP/1.1" 404 Not Found
+INFO:     192.168.0.41:49593 - "POST /api/generate-itinerary HTTP/1.1" 404 Not Found

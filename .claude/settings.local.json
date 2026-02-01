@@ -5,7 +5,14 @@
       "WebSearch",
       "mcp__plugin_context7_context7__query-docs",
       "WebFetch(domain:serpapi.com)",
-      "WebFetch(domain:innovationlab.fetch.ai)"
+      "WebFetch(domain:innovationlab.fetch.ai)",
+      "Bash(grep:*)",
+      "Bash(python -c:*)",
+      "Bash(python:*)",
+      "Bash(curl:*)",
+      "mcp__google-maps-platform-code-assist__retrieve-instructions",
+      "mcp__google-maps-platform-code-assist__retrieve-google-maps-platform-docs",
+      "Bash(npx expo:*)"
     ]
   }
 }

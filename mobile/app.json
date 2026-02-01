@@ -19,6 +19,9 @@
           "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
         }
+      },
+      "config": {
+        "googleMapsApiKey": "AIzaSyAw6cUsogGg7oQnqGwnOGrKgION80sCYbU"
       }
     },
     "android": {
@@ -26,7 +29,12 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F9EAEC"
       },
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAw6cUsogGg7oQnqGwnOGrKgION80sCYbU"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
