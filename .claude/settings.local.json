@@ -5,7 +5,10 @@
       "WebSearch",
       "mcp__plugin_context7_context7__query-docs",
       "WebFetch(domain:serpapi.com)",
-      "WebFetch(domain:innovationlab.fetch.ai)"
+      "WebFetch(domain:innovationlab.fetch.ai)",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(pip install:*)"
     ]
   }
 }

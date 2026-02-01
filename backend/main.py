@@ -407,12 +407,13 @@ async def geocode_itinerary(request: GeocodeRequest):
 
     data = itineraries_store[request.itinerary_id]
     city = data["city"]
+    state = data.get("state", "")
 
     geocoded_events = []
     valid_coords = []
 
     for item in data["itinerary"]:
-        coords = await geocoding_service.geocode(item.location, city)
+        coords = await geocoding_service.geocode(item.location, city, state)
 
         geocoded_event = GeocodedEvent(
             title=item.title,
@@ -435,8 +436,10 @@ async def geocode_itinerary(request: GeocodeRequest):
         }
     else:
         # Fallback to city center geocoding
-        city_coords = await geocoding_service.geocode(city)
+        city_coords = await geocoding_service.geocode(city, "", state)
         center = city_coords or {"lat": 40.7128, "lng": -74.0060}
+
+    return GeocodeResponse(events=geocoded_events, center=center)
 
     return GeocodeResponse(events=geocoded_events, center=center)
 
@@ -448,11 +451,12 @@ async def get_route(request: RouteRequest):
 
     data = itineraries_store[request.itinerary_id]
     city = data["city"]
+    state = data.get("state", "")
 
     # First geocode all locations
     stops = []
     for item in data["itinerary"]:
-        coords = await geocoding_service.geocode(item.location, city)
+        coords = await geocoding_service.geocode(item.location, city, state)
         if coords:
             stops.append(coords)
 

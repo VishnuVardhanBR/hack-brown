@@ -82,9 +82,15 @@ Rules:
 - Use realistic costs based on ticket prices shown
 - If an event is free, set estimated_cost to 0
 
+CRITICAL - Location Format:
+The "location" field MUST be a precise, geocodable street address including city and state.
+- GOOD: "11 W 53rd St, New York, NY" or "Museum of Modern Art, 11 W 53rd St, New York, NY"
+- BAD: "MoMA", "Downtown", "Art District", "Near Central Park"
+If you don't know the exact address, use the venue name + city + state (e.g., "Central Park, New York, NY").
+
 Return a JSON array:
 [
-    {{"title": "Name", "date": "{dates[0]}", "start_time": "10:00", "end_time": "12:00", "location": "Address", "description": "Fun description", "ticket_info": "Price or Free", "estimated_cost": 0.00}}
+    {{"title": "Event Name", "date": "{dates[0]}", "start_time": "10:00", "end_time": "12:00", "location": "123 Main St, {city}", "description": "Fun description", "ticket_info": "Price or Free", "estimated_cost": 0.00}}
 ]
 
 Return 3-5 events. Total cost under ${total_max}.
