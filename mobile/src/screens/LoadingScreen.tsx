@@ -14,7 +14,7 @@ import { API_BASE_URL } from '../config/api';
 
 const { width, height } = Dimensions.get('window');
 
-// Import video assets
+// Video assets for city backgrounds
 const videos: { [key: string]: any } = {
     'San Francisco': require('../assets/sf.mp4'),
     'New York': require('../assets/nyc.mp4'),
@@ -27,7 +27,7 @@ interface LoadingScreenProps {
 }
 
 export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route }) => {
-    const { city, budget, dates, preferences } = route.params || {};
+    const { city, budget, dates, preferences, isRecalculating } = route.params || {};
     const videoRef = useRef<Video>(null);
     const [isReversing, setIsReversing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -53,7 +53,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
 
     const cityName = getCityName();
     const cityState = getCityState();
-    const videoSource = videos[cityName] || videos['San Francisco'];
+    const videoSource = videos[cityName] || null;
 
     useEffect(() => {
         // Fade in the screen
@@ -79,8 +79,8 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
         setIsLoading(true);
 
         try {
-            // Get the first date from dates array, or use today
-            const date = dates && dates.length > 0 ? dates[0] : new Date().toISOString().split('T')[0];
+            // Get dates array or use today as fallback
+            const datesArray = dates && dates.length > 0 ? dates : [new Date().toISOString().split('T')[0]];
 
             const response = await fetch(`${API_BASE_URL}/generate-itinerary`, {
                 method: 'POST',
@@ -90,7 +90,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
                 body: JSON.stringify({
                     city: cityName,
                     state: cityState,
-                    date: date,
+                    dates: datesArray,
                     budget: formatBudget(budget),
                     preferences: preferences || '',
                 }),
@@ -108,7 +108,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
                 itineraryId: data.itinerary_id,
                 totalCost: data.total_cost,
                 city: cityName,
-                date: date,
+                dates: datesArray,
                 summary: data.summary,
             });
         } catch (err: any) {
@@ -159,6 +159,9 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
         }
     };
 
+    // Check if error is "no events found" type
+    const isNoEventsError = error?.toLowerCase().includes('no events found');
+
     // Error state
     if (error) {
         return (
@@ -166,39 +169,52 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
                 <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
                 {/* Video Background */}
-                <Video
-                    ref={videoRef}
-                    source={videoSource}
-                    style={styles.video}
-                    resizeMode={ResizeMode.COVER}
-                    isLooping
-                    shouldPlay
-                    isMuted
-                    onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-                />
+                {videoSource && (
+                    <Video
+                        ref={videoRef}
+                        source={videoSource}
+                        style={styles.video}
+                        resizeMode={ResizeMode.COVER}
+                        isLooping
+                        shouldPlay
+                        isMuted
+                        onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+                    />
+                )}
 
                 {/* Purple Overlay */}
                 <View style={styles.overlay} />
 
                 {/* Error Content */}
                 <View style={styles.errorContent}>
-                    <View style={styles.logoContainer}>
-                        <View style={styles.logoPlaceholder}>
-                            <Text style={styles.logoText}>LOGO</Text>
-                        </View>
-                    </View>
-
                     <View style={styles.errorContainer}>
-                        <Text style={styles.errorIcon}>😕</Text>
-                        <Text style={styles.errorTitle}>Oops!</Text>
-                        <Text style={styles.errorMessage}>{error}</Text>
+                        <Text style={styles.errorIcon}>{isNoEventsError ? '🔍' : '😕'}</Text>
+                        <Text style={styles.errorTitle}>
+                            {isNoEventsError ? 'No Events Found' : 'Oops!'}
+                        </Text>
+                        <Text style={styles.errorMessage}>
+                            {isNoEventsError
+                                ? `We couldn't find events in ${cityName} matching your criteria.`
+                                : error}
+                        </Text>
+                        
+                        {isNoEventsError && (
+                            <View style={styles.suggestionsContainer}>
+                                <Text style={styles.suggestionsTitle}>Try:</Text>
+                                <Text style={styles.suggestionItem}>• Different dates</Text>
+                                <Text style={styles.suggestionItem}>• A higher budget</Text>
+                                <Text style={styles.suggestionItem}>• Fewer preferences</Text>
+                            </View>
+                        )}
 
                         <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
                             <Text style={styles.retryButtonText}>Try Again</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-                            <Text style={styles.backButtonText}>Go Back</Text>
+                            <Text style={styles.backButtonText}>
+                                {isNoEventsError ? 'Adjust Criteria' : 'Go Back'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -211,29 +227,24 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             {/* Video Background */}
-            <Video
-                ref={videoRef}
-                source={videoSource}
-                style={styles.video}
-                resizeMode={ResizeMode.COVER}
-                isLooping
-                shouldPlay
-                isMuted
-                onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-            />
+            {videoSource && (
+                <Video
+                    ref={videoRef}
+                    source={videoSource}
+                    style={styles.video}
+                    resizeMode={ResizeMode.COVER}
+                    isLooping
+                    shouldPlay
+                    isMuted
+                    onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+                />
+            )}
 
             {/* Purple Overlay */}
             <Animated.View style={[styles.overlay, { opacity: fadeAnim }]} />
 
             {/* Content */}
             <Animated.View style={[styles.content, { opacity: textFadeAnim }]}>
-                {/* Logo at top */}
-                <View style={styles.logoContainer}>
-                    <View style={styles.logoPlaceholder}>
-                        <Text style={styles.logoText}>LOGO</Text>
-                    </View>
-                </View>
-
                 {/* Loading Message */}
                 <View style={styles.messageContainer}>
                     <Text style={styles.loadingTitle}>
@@ -360,6 +371,22 @@ const styles = StyleSheet.create({
         color: colors.textLight,
         fontSize: 16,
         opacity: 0.8,
+    },
+    suggestionsContainer: {
+        marginBottom: 24,
+        alignItems: 'center',
+    },
+    suggestionsTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.textLight,
+        marginBottom: 8,
+    },
+    suggestionItem: {
+        fontSize: 15,
+        color: colors.textLight,
+        opacity: 0.8,
+        marginVertical: 2,
     },
 });
 

@@ -118,13 +118,6 @@ export const BudgetScreen: React.FC<BudgetScreenProps> = ({ navigation, route })
                 <Text style={styles.backArrow}>←</Text>
             </TouchableOpacity>
 
-            {/* Logo at top */}
-            <View style={styles.logoContainer}>
-                <View style={styles.logoPlaceholder}>
-                    <Text style={styles.logoText}>LOGO</Text>
-                </View>
-            </View>
-
             {/* Title */}
             <Animated.View
                 style={[
@@ -234,13 +227,13 @@ const styles = StyleSheet.create({
     titleContainer: {
         alignItems: 'flex-start',
         paddingHorizontal: 24,
-        marginTop: 50,
+        marginTop: 100,
     },
     titleText: {
-        fontSize: 36,
+        fontSize: 32,
         fontWeight: '900',
         color: colors.textPrimary,
-        letterSpacing: -1,
+        letterSpacing: -0.5,
     },
     budgetDisplayContainer: {
         alignItems: 'center',

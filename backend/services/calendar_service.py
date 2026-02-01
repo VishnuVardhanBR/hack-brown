@@ -10,15 +10,15 @@ class CalendarService:
     def generate_ics(
         self,
         itinerary: List[Dict[str, Any]],
-        date: str,
+        dates: List[str],
         city: str
     ) -> str:
         """
         Generate ICS calendar content from itinerary.
         
         Args:
-            itinerary: List of itinerary items
-            date: Date string (YYYY-MM-DD)
+            itinerary: List of itinerary items (each with a 'date' field)
+            dates: List of date strings (YYYY-MM-DD) for fallback
             city: City name for metadata
             
         Returns:
@@ -30,7 +30,8 @@ class CalendarService:
         cal.add('calscale', 'GREGORIAN')
         cal.add('x-wr-calname', f'Metropolis - {city} Itinerary')
 
-        base_date = datetime.strptime(date, "%Y-%m-%d")
+        # Default date for events without a date field
+        default_date = dates[0] if dates else datetime.now().strftime("%Y-%m-%d")
 
         for item in itinerary:
             event = ICSEvent()
@@ -38,14 +39,18 @@ class CalendarService:
             event.add('description', item.get('description', ''))
             event.add('location', item.get('location', ''))
 
+            # Use event's date field or fallback to default
+            event_date_str = item.get('date', default_date)
+            event_date = datetime.strptime(event_date_str, "%Y-%m-%d")
+
             start_time = self._parse_time(item.get('start_time', '09:00'))
             end_time = self._parse_time(item.get('end_time', '10:00'))
 
-            event.add('dtstart', base_date.replace(
+            event.add('dtstart', event_date.replace(
                 hour=start_time.hour,
                 minute=start_time.minute
             ))
-            event.add('dtend', base_date.replace(
+            event.add('dtend', event_date.replace(
                 hour=end_time.hour,
                 minute=end_time.minute
             ))

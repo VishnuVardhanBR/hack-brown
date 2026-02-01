@@ -14,13 +14,13 @@ class SerpAPIService:
         self,
         city: str,
         state: str,
-        date: str,
+        dates: List[str],
         budget: str,
         preferences: str = ""
     ) -> List[Dict[str, Any]]:
         """
         Search for events using SerpAPI Google Events engine.
-        Keep query simple - Gemini will filter by preferences.
+        Keep query simple - Gemini will filter by preferences and dates.
         """
         # Simple query only - complex queries fail
         query = f"Events in {city}, {state}"
@@ -49,8 +49,10 @@ class SerpAPIService:
             if not events:
                 return self._get_fallback_events(city, date)
 
-            # Return all events - Gemini will filter by budget and preferences
-            return events[:15]
+            # Pre-filter events by budget before sending to Gemini
+            filtered_events = self._filter_by_budget(events, budget)
+            print(f"[SerpAPI] After budget filter ({budget}): {len(filtered_events)} events")
+            return filtered_events
 
         except Exception as e:
             print(f"[SerpAPI] Error: {e}")
