@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -9,12 +9,25 @@ import {
     Dimensions,
     Platform,
     ScrollView,
+    Animated,
 } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config/api';
 
 const { width, height } = Dimensions.get('window');
+
+// Fly-through animation settings
+const FLY_THROUGH_CONFIG = {
+    initialOverviewDuration: 2000,
+    transitionDuration: 2500,
+    pauseAtLocation: 2000,
+    finalOverviewDuration: 2000,
+    overviewZoom: 13,
+    locationZoom: 17,
+    overviewPitch: 45,
+    locationPitch: 65,
+};
 
 interface GeocodedEvent {
     title: string;
@@ -45,8 +58,18 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Fly-through state
+    const [isFlyingThrough, setIsFlyingThrough] = useState(false);
+    const [currentFlyThroughIndex, setCurrentFlyThroughIndex] = useState(-1);
+    const [flyThroughComplete, setFlyThroughComplete] = useState(false);
+    const flyThroughAbortRef = useRef(false);
+    const progressAnim = useRef(new Animated.Value(0)).current;
+
     useEffect(() => {
         fetchGeocodedLocations();
+        return () => {
+            flyThroughAbortRef.current = true;
+        };
     }, []);
 
     const fetchGeocodedLocations = async () => {
@@ -72,10 +95,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
 
             setLoading(false);
 
-            // Fit map to show all markers after a short delay
+            // Start fly-through animation after map loads
             setTimeout(() => {
-                fitMapToMarkers(data.events);
-            }, 500);
+                startFlyThrough(data.events);
+            }, 1000);
         } catch (err: any) {
             setError(err.message);
             setLoading(false);
@@ -152,6 +175,172 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         );
     };
 
+    // Calculate bearing between two points for camera heading
+    const calculateBearing = (
+        from: { latitude: number; longitude: number },
+        to: { latitude: number; longitude: number }
+    ): number => {
+        const startLat = (from.latitude * Math.PI) / 180;
+        const startLng = (from.longitude * Math.PI) / 180;
+        const destLat = (to.latitude * Math.PI) / 180;
+        const destLng = (to.longitude * Math.PI) / 180;
+
+        const y = Math.sin(destLng - startLng) * Math.cos(destLat);
+        const x =
+            Math.cos(startLat) * Math.sin(destLat) -
+            Math.sin(startLat) * Math.cos(destLat) * Math.cos(destLng - startLng);
+
+        let bearing = (Math.atan2(y, x) * 180) / Math.PI;
+        return (bearing + 360) % 360;
+    };
+
+    // Fly to a specific location with 3D camera
+    const flyToLocation = useCallback(
+        async (
+            lat: number,
+            lng: number,
+            heading: number = 0,
+            duration: number = FLY_THROUGH_CONFIG.transitionDuration
+        ): Promise<void> => {
+            return new Promise((resolve) => {
+                if (!mapRef.current || flyThroughAbortRef.current) {
+                    resolve();
+                    return;
+                }
+
+                mapRef.current.animateCamera(
+                    {
+                        center: { latitude: lat, longitude: lng },
+                        pitch: FLY_THROUGH_CONFIG.locationPitch,
+                        heading: heading,
+                        zoom: FLY_THROUGH_CONFIG.locationZoom,
+                    },
+                    { duration }
+                );
+
+                setTimeout(resolve, duration);
+            });
+        },
+        []
+    );
+
+    // Show overview of all locations
+    const showOverview = useCallback(
+        async (
+            coords: { latitude: number; longitude: number }[],
+            duration: number = FLY_THROUGH_CONFIG.initialOverviewDuration
+        ): Promise<void> => {
+            return new Promise((resolve) => {
+                if (!mapRef.current || coords.length === 0 || flyThroughAbortRef.current) {
+                    resolve();
+                    return;
+                }
+
+                const avgLat = coords.reduce((sum, c) => sum + c.latitude, 0) / coords.length;
+                const avgLng = coords.reduce((sum, c) => sum + c.longitude, 0) / coords.length;
+
+                mapRef.current.animateCamera(
+                    {
+                        center: { latitude: avgLat, longitude: avgLng },
+                        pitch: FLY_THROUGH_CONFIG.overviewPitch,
+                        heading: 0,
+                        zoom: FLY_THROUGH_CONFIG.overviewZoom,
+                    },
+                    { duration }
+                );
+
+                setTimeout(resolve, duration);
+            });
+        },
+        []
+    );
+
+    // Start the fly-through animation sequence
+    const startFlyThrough = useCallback(
+        async (eventList: GeocodedEvent[]) => {
+            const validEvents = eventList.filter((e) => e.lat !== null && e.lng !== null);
+            if (validEvents.length === 0) return;
+
+            flyThroughAbortRef.current = false;
+            setIsFlyingThrough(true);
+            setFlyThroughComplete(false);
+            setCurrentFlyThroughIndex(-1);
+            progressAnim.setValue(0);
+
+            const coords = validEvents.map((e) => ({
+                latitude: e.lat!,
+                longitude: e.lng!,
+            }));
+
+            // Step 1: Show overview
+            await showOverview(coords);
+            if (flyThroughAbortRef.current) return;
+
+            // Step 2: Fly to each location
+            for (let i = 0; i < validEvents.length; i++) {
+                if (flyThroughAbortRef.current) break;
+
+                setCurrentFlyThroughIndex(i);
+
+                // Animate progress bar
+                Animated.timing(progressAnim, {
+                    toValue: (i + 1) / validEvents.length,
+                    duration: FLY_THROUGH_CONFIG.transitionDuration,
+                    useNativeDriver: false,
+                }).start();
+
+                const event = validEvents[i];
+                const nextEvent = validEvents[i + 1];
+
+                // Calculate heading towards next location (or keep north for last)
+                let heading = 0;
+                if (nextEvent && nextEvent.lat && nextEvent.lng) {
+                    heading = calculateBearing(
+                        { latitude: event.lat!, longitude: event.lng! },
+                        { latitude: nextEvent.lat, longitude: nextEvent.lng }
+                    );
+                }
+
+                await flyToLocation(event.lat!, event.lng!, heading);
+                if (flyThroughAbortRef.current) break;
+
+                // Pause at location
+                await new Promise((resolve) =>
+                    setTimeout(resolve, FLY_THROUGH_CONFIG.pauseAtLocation)
+                );
+            }
+
+            if (!flyThroughAbortRef.current) {
+                // Step 3: Return to overview
+                await showOverview(coords, FLY_THROUGH_CONFIG.finalOverviewDuration);
+            }
+
+            setIsFlyingThrough(false);
+            setFlyThroughComplete(true);
+            setCurrentFlyThroughIndex(-1);
+        },
+        [flyToLocation, showOverview, progressAnim]
+    );
+
+    // Replay the fly-through
+    const replayFlyThrough = () => {
+        startFlyThrough(events);
+    };
+
+    // Skip/stop fly-through
+    const skipFlyThrough = () => {
+        flyThroughAbortRef.current = true;
+        setIsFlyingThrough(false);
+        setFlyThroughComplete(true);
+        setCurrentFlyThroughIndex(-1);
+
+        // Show final overview
+        const validCoords = events
+            .filter((e) => e.lat !== null && e.lng !== null)
+            .map((e) => ({ latitude: e.lat!, longitude: e.lng! }));
+        showOverview(validCoords);
+    };
+
     const getPolylineCoordinates = () => {
         // Use actual route if available, otherwise fall back to straight lines
         if (routeCoordinates.length > 0) {
@@ -174,7 +363,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             <View style={styles.loadingContainer}>
                 <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>Loading 3D map...</Text>
+                <Text style={styles.loadingText}>Preparing 3D tour...</Text>
             </View>
         );
     }
@@ -196,6 +385,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         );
     }
 
+    const validEventsCount = events.filter((e) => e.lat !== null).length;
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -204,12 +395,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                 ref={mapRef}
                 style={styles.map}
                 provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
+                mapType="standard"
                 showsBuildings={true}
                 showsIndoors={true}
                 showsTraffic={false}
                 showsCompass={true}
                 rotateEnabled={true}
                 pitchEnabled={true}
+                scrollEnabled={!isFlyingThrough}
+                zoomEnabled={!isFlyingThrough}
                 initialRegion={center ? {
                     latitude: center.lat,
                     longitude: center.lng,
@@ -226,9 +420,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                     />
                 )}
 
-                {/* Markers for each stop */}
+                {/* Markers for each stop with custom styling */}
                 {events.map((event, index) => {
                     if (event.lat === null || event.lng === null) return null;
+                    const isCurrentStop = currentFlyThroughIndex === index;
 
                     return (
                         <Marker
@@ -239,8 +434,20 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                             }}
                             title={`${index + 1}. ${event.title}`}
                             description={`${event.start_time} - ${event.end_time}`}
-                            pinColor={colors.primary}
-                        />
+                            anchor={{ x: 0.5, y: 1 }}
+                        >
+                            <View style={[
+                                styles.customMarker,
+                                isCurrentStop && styles.customMarkerActive
+                            ]}>
+                                <Text style={[
+                                    styles.customMarkerText,
+                                    isCurrentStop && styles.customMarkerTextActive
+                                ]}>
+                                    {index + 1}
+                                </Text>
+                            </View>
+                        </Marker>
                     );
                 })}
             </MapView>
@@ -248,36 +455,91 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             {/* Header Overlay */}
             <View style={styles.headerOverlay}>
                 <View style={styles.headerContent}>
-                    <Text style={styles.headerTitle}>{city} Route</Text>
-                    <Text style={styles.headerSubtitle}>{events.length} stops</Text>
+                    <Text style={styles.headerTitle}>{city} Tour</Text>
+                    <Text style={styles.headerSubtitle}>
+                        {isFlyingThrough
+                            ? `Flying to stop ${currentFlyThroughIndex + 1} of ${validEventsCount}`
+                            : `${validEventsCount} stops`}
+                    </Text>
                 </View>
                 <TouchableOpacity style={styles.closeIconButton} onPress={handleClose}>
                     <Text style={styles.closeIcon}>✕</Text>
                 </TouchableOpacity>
             </View>
 
-            {/* Legend */}
-            <View style={styles.legend}>
-                <ScrollView showsVerticalScrollIndicator={false}>
-                    {events.map((event, index) => {
-                        if (event.lat === null) return null;
-                        return (
-                            <View key={index} style={[
-                                styles.legendItem,
-                                index === events.filter(e => e.lat !== null).length - 1 && styles.legendItemLast
-                            ]}>
-                                <View style={styles.legendNumber}>
-                                    <Text style={styles.legendNumberText}>{index + 1}</Text>
+            {/* Fly-through Progress Indicator */}
+            {isFlyingThrough && (
+                <View style={styles.progressContainer}>
+                    <View style={styles.progressBarBackground}>
+                        <Animated.View
+                            style={[
+                                styles.progressBarFill,
+                                {
+                                    width: progressAnim.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: ['0%', '100%'],
+                                    }),
+                                },
+                            ]}
+                        />
+                    </View>
+                    <TouchableOpacity style={styles.skipButton} onPress={skipFlyThrough}>
+                        <Text style={styles.skipButtonText}>Skip Tour</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {/* Replay Button - shown after fly-through completes */}
+            {flyThroughComplete && !isFlyingThrough && (
+                <TouchableOpacity style={styles.replayButton} onPress={replayFlyThrough}>
+                    <Text style={styles.replayButtonIcon}>▶</Text>
+                    <Text style={styles.replayButtonText}>Replay Tour</Text>
+                </TouchableOpacity>
+            )}
+
+            {/* Legend - hide during fly-through for immersive experience */}
+            {!isFlyingThrough && (
+                <View style={styles.legend}>
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                        {events.map((event, index) => {
+                            if (event.lat === null) return null;
+                            return (
+                                <View key={index} style={[
+                                    styles.legendItem,
+                                    index === validEventsCount - 1 && styles.legendItemLast
+                                ]}>
+                                    <View style={styles.legendNumber}>
+                                        <Text style={styles.legendNumberText}>{index + 1}</Text>
+                                    </View>
+                                    <Text style={styles.legendTitle} numberOfLines={1}>
+                                        {event.title}
+                                    </Text>
+                                    <Text style={styles.legendTime}>{event.start_time}</Text>
                                 </View>
-                                <Text style={styles.legendTitle} numberOfLines={1}>
-                                    {event.title}
-                                </Text>
-                                <Text style={styles.legendTime}>{event.start_time}</Text>
-                            </View>
-                        );
-                    })}
-                </ScrollView>
-            </View>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+            )}
+
+            {/* Current Location Card - shown during fly-through */}
+            {isFlyingThrough && currentFlyThroughIndex >= 0 && currentFlyThroughIndex < events.length && (
+                <View style={styles.currentLocationCard}>
+                    <View style={styles.currentLocationNumber}>
+                        <Text style={styles.currentLocationNumberText}>
+                            {currentFlyThroughIndex + 1}
+                        </Text>
+                    </View>
+                    <View style={styles.currentLocationContent}>
+                        <Text style={styles.currentLocationTitle} numberOfLines={1}>
+                            {events[currentFlyThroughIndex].title}
+                        </Text>
+                        <Text style={styles.currentLocationTime}>
+                            {events[currentFlyThroughIndex].start_time} - {events[currentFlyThroughIndex].end_time}
+                        </Text>
+                    </View>
+                </View>
+            )}
         </View>
     );
 };
@@ -437,6 +699,142 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: colors.textSecondary,
         marginLeft: 8,
+    },
+    // Custom marker styles
+    customMarker: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: '#fff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 5,
+    },
+    customMarkerActive: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#FF6B6B',
+        borderWidth: 4,
+        transform: [{ scale: 1.1 }],
+    },
+    customMarkerText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    customMarkerTextActive: {
+        fontSize: 18,
+    },
+    // Progress indicator styles
+    progressContainer: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 120 : 100,
+        left: 20,
+        right: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    progressBarBackground: {
+        flex: 1,
+        height: 6,
+        backgroundColor: 'rgba(255,255,255,0.5)',
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: '100%',
+        backgroundColor: colors.primary,
+        borderRadius: 3,
+    },
+    skipButton: {
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+    },
+    skipButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    // Replay button styles
+    replayButton: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 120 : 100,
+        alignSelf: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.primary,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 25,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 4,
+        gap: 8,
+    },
+    replayButtonIcon: {
+        color: '#fff',
+        fontSize: 14,
+    },
+    replayButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    // Current location card during fly-through
+    currentLocationCard: {
+        position: 'absolute',
+        bottom: 40,
+        left: 20,
+        right: 20,
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        borderRadius: 16,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    currentLocationNumber: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 14,
+    },
+    currentLocationNumberText: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '800',
+    },
+    currentLocationContent: {
+        flex: 1,
+    },
+    currentLocationTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: colors.textPrimary,
+        marginBottom: 4,
+    },
+    currentLocationTime: {
+        fontSize: 14,
+        color: colors.textSecondary,
     },
 });
 
