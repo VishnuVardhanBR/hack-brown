@@ -123,13 +123,6 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
                     <Text style={styles.backArrow}>←</Text>
                 </TouchableOpacity>
 
-                {/* Logo at top */}
-                <View style={styles.logoContainer}>
-                    <View style={styles.logoPlaceholder}>
-                        <Text style={styles.logoText}>LOGO</Text>
-                    </View>
-                </View>
-
                 {/* Title */}
                 <Animated.View
                     style={[
@@ -239,10 +232,10 @@ const styles = StyleSheet.create({
     titleContainer: {
         alignItems: 'flex-start',
         paddingHorizontal: 24,
-        marginTop: 30,
+        marginTop: 100,
     },
     titleText: {
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: '900',
         color: colors.textPrimary,
         letterSpacing: -0.5,

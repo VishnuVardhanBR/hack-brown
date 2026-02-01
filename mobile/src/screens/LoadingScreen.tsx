@@ -184,12 +184,6 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
 
                 {/* Error Content */}
                 <View style={styles.errorContent}>
-                    <View style={styles.logoContainer}>
-                        <View style={styles.logoPlaceholder}>
-                            <Text style={styles.logoText}>LOGO</Text>
-                        </View>
-                    </View>
-
                     <View style={styles.errorContainer}>
                         <Text style={styles.errorIcon}>😕</Text>
                         <Text style={styles.errorTitle}>Oops!</Text>
@@ -231,13 +225,6 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
 
             {/* Content */}
             <Animated.View style={[styles.content, { opacity: textFadeAnim }]}>
-                {/* Logo at top */}
-                <View style={styles.logoContainer}>
-                    <View style={styles.logoPlaceholder}>
-                        <Text style={styles.logoText}>LOGO</Text>
-                    </View>
-                </View>
-
                 {/* Loading Message */}
                 <View style={styles.messageContainer}>
                     <Text style={styles.loadingTitle}>

@@ -123,13 +123,6 @@ export const AdditionalPreferencesScreen: React.FC<AdditionalPreferencesScreenPr
                         <Text style={styles.backArrow}>←</Text>
                     </TouchableOpacity>
 
-                    {/* Logo at top */}
-                    <View style={styles.logoContainer}>
-                        <View style={styles.logoPlaceholder}>
-                            <Text style={styles.logoText}>LOGO</Text>
-                        </View>
-                    </View>
-
                     {/* Title */}
                     <Animated.View
                         style={[
@@ -243,14 +236,14 @@ const styles = StyleSheet.create({
     titleContainer: {
         alignItems: 'flex-start',
         paddingHorizontal: 24,
-        marginTop: 40,
+        marginTop: 100,
     },
     titleText: {
-        fontSize: 24,
+        fontSize: 32,
         fontWeight: '900',
         color: colors.textPrimary,
         letterSpacing: -0.5,
-        lineHeight: 32,
+        lineHeight: 42,
     },
     cityHighlight: {
         color: colors.primary,
