@@ -21,7 +21,7 @@
         }
       },
       "config": {
-        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+        "googleMapsApiKey": "AIzaSyDaQ5zolpTHbODThpi_nT0F9eYOH3iEJqw"
       }
     },
     "android": {
@@ -32,7 +32,7 @@
       "usesCleartextTraffic": true,
       "config": {
         "googleMaps": {
-          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+          "apiKey": "AIzaSyDaQ5zolpTHbODThpi_nT0F9eYOH3iEJqw"
         }
       }
     },
