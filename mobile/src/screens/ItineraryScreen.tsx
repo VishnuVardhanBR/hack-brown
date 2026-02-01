@@ -65,7 +65,7 @@ export const ItineraryScreen: React.FC<ItineraryScreenProps> = ({ navigation, ro
         try {
             const url = `${API_BASE_URL}/export-ics/${itineraryId}`;
             const supported = await Linking.canOpenURL(url);
-            
+
             if (supported) {
                 await Linking.openURL(url);
             } else {
