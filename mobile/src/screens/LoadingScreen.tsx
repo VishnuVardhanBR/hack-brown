@@ -159,6 +159,9 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
         }
     };
 
+    // Check if error is "no events found" type
+    const isNoEventsError = error?.toLowerCase().includes('no events found');
+
     // Error state
     if (error) {
         return (
@@ -185,16 +188,33 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
                 {/* Error Content */}
                 <View style={styles.errorContent}>
                     <View style={styles.errorContainer}>
-                        <Text style={styles.errorIcon}>😕</Text>
-                        <Text style={styles.errorTitle}>Oops!</Text>
-                        <Text style={styles.errorMessage}>{error}</Text>
+                        <Text style={styles.errorIcon}>{isNoEventsError ? '🔍' : '😕'}</Text>
+                        <Text style={styles.errorTitle}>
+                            {isNoEventsError ? 'No Events Found' : 'Oops!'}
+                        </Text>
+                        <Text style={styles.errorMessage}>
+                            {isNoEventsError
+                                ? `We couldn't find events in ${cityName} matching your criteria.`
+                                : error}
+                        </Text>
+                        
+                        {isNoEventsError && (
+                            <View style={styles.suggestionsContainer}>
+                                <Text style={styles.suggestionsTitle}>Try:</Text>
+                                <Text style={styles.suggestionItem}>• Different dates</Text>
+                                <Text style={styles.suggestionItem}>• A higher budget</Text>
+                                <Text style={styles.suggestionItem}>• Fewer preferences</Text>
+                            </View>
+                        )}
 
                         <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
                             <Text style={styles.retryButtonText}>Try Again</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-                            <Text style={styles.backButtonText}>Go Back</Text>
+                            <Text style={styles.backButtonText}>
+                                {isNoEventsError ? 'Adjust Criteria' : 'Go Back'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -351,6 +371,22 @@ const styles = StyleSheet.create({
         color: colors.textLight,
         fontSize: 16,
         opacity: 0.8,
+    },
+    suggestionsContainer: {
+        marginBottom: 24,
+        alignItems: 'center',
+    },
+    suggestionsTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.textLight,
+        marginBottom: 8,
+    },
+    suggestionItem: {
+        fontSize: 15,
+        color: colors.textLight,
+        opacity: 0.8,
+        marginVertical: 2,
     },
 });
 
