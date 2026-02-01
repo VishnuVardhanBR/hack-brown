@@ -242,7 +242,16 @@ hack-brown/
 
 ## License
 
-This project was built for HackBrown hackathon.
+This project was built for Hack@Brown 2025 hackathon.
+
+---
+
+## Team
+
+- Vishnu Bheem Reddy
+- Anthony Chen
+- Rohan Vittal
+- Phillip Tran
 
 ---
 
