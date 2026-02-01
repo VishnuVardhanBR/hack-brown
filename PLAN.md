@@ -2,11 +2,10 @@
 
 ## Project Overview
 
-Metropolis is a mobile application that leverages Fetch.ai's autonomous agents to discover events and intelligently build personalized itineraries. Users input their city, budget, dates, and preferences, and the app's AI agents collaborate to find relevant events and construct an optimized schedule that can be exported as an .ics calendar file.
+Metropolis is a mobile application that uses Google Gemini AI to discover events and intelligently build personalized itineraries. Users input their city, budget, dates, and preferences, and the app uses SerpAPI for event discovery and Gemini for intelligent itinerary planning, constructing an optimized schedule that can be exported as an .ics calendar file.
 
 ### Target Tracks
 - Beginner Track
-- Fetch.ai
 - Visa
 - Metropolis
 - Best Domain
@@ -56,18 +55,13 @@ Based on the Metropolis cityscape aesthetic with soft pinks and purples:
 
 ### Backend
 - **FastAPI** (Python) - REST API server
-- **Fetch.ai uAgents** - Autonomous agent framework
 - **Pydantic** - Data validation and settings
+- **Modular Services** - Clean service architecture
 
 ### External APIs
 - **SerpAPI** - Google Events search
-- **Google Gemini API** - Structured itinerary generation
+- **Google Gemini API (gemini-2.0-flash)** - Structured itinerary generation
 - **icalendar** (Python library) - .ics file generation
-
-### Fetch.ai Components
-- **uAgents Framework** - Agent creation and management
-- **Protocols** - Agent communication patterns
-- **Bureau** - Multi-agent orchestration
 
 ---
 
@@ -93,271 +87,81 @@ Based on the Metropolis cityscape aesthetic with soft pinks and purples:
 │                         FASTAPI BACKEND                              │
 │  ┌────────────────────────────────────────────────────────────┐    │
 │  │                    REST API Endpoints                       │    │
-│  │  POST /api/search-events                                    │    │
 │  │  POST /api/generate-itinerary                               │    │
 │  │  GET  /api/export-ics/{itinerary_id}                        │    │
+│  │  GET  /api/health                                           │    │
 │  └────────────────────────────────────────────────────────────┘    │
 │                              │                                       │
 │                              ↓                                       │
 │  ┌────────────────────────────────────────────────────────────┐    │
-│  │                    AGENT ORCHESTRATOR                       │    │
-│  │              (Bureau - Multi-Agent Manager)                 │    │
+│  │                    SERVICE LAYER                            │    │
 │  └────────────────────────────────────────────────────────────┘    │
 │         │                    │                    │                  │
 │         ↓                    ↓                    ↓                  │
 │  ┌────────────┐      ┌────────────┐      ┌────────────┐            │
-│  │   Event    │      │  Itinerary │      │  Calendar  │            │
-│  │  Finder    │ ───→ │  Planner   │ ───→ │  Export    │            │
-│  │   Agent    │      │   Agent    │      │   Agent    │            │
+│  │  SerpAPI   │      │  Gemini    │      │  Calendar  │            │
+│  │  Service   │ ───→ │  Service   │ ───→ │  Service   │            │
 │  └────────────┘      └────────────┘      └────────────┘            │
 │         │                    │                                       │
 │         ↓                    ↓                                       │
 │  ┌────────────┐      ┌────────────┐                                │
 │  │  SerpAPI   │      │  Gemini    │                                │
-│  │  (Events)  │      │   API      │                                │
+│  │  (Events)  │      │ 2.0 Flash  │                                │
 │  └────────────┘      └────────────┘                                │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Fetch.ai Agent Architecture
+## Service Architecture
 
-### Agent 1: Event Finder Agent
+### SerpAPI Service
 
-**Purpose:** Discovers events based on user criteria using SerpAPI.
-
-```python
-from uagents import Agent, Context, Model, Protocol
-from serpapi import GoogleSearch
-import os
-
-class EventSearchRequest(Model):
-    city: str
-    state: str
-    date: str
-    budget: str
-    preferences: str = ""
-
-class EventSearchResponse(Model):
-    events: list  # List of event dictionaries
-    search_query: str
-    total_found: int
-
-event_finder = Agent(
-    name="event_finder",
-    seed="event_finder_seed_phrase",
-    port=8001,
-    endpoint=["http://localhost:8001/submit"]
-)
-
-event_protocol = Protocol("EventSearch")
-
-@event_protocol.on_message(model=EventSearchRequest, replies=EventSearchResponse)
-async def find_events(ctx: Context, sender: str, msg: EventSearchRequest):
-    # Build search query
-    query = f"Events in {msg.city}, {msg.state}"
-    if msg.preferences:
-        query += f" {msg.preferences}"
-
-    # Call SerpAPI
-    params = {
-        "api_key": os.getenv("SERPAPI_KEY"),
-        "engine": "google_events",
-        "q": query,
-        "hl": "en",
-        "gl": "us"
-    }
-
-    search = GoogleSearch(params)
-    results = search.get_dict()
-    events = results.get("events_results", [])
-
-    # Filter by budget if specified
-    filtered_events = filter_by_budget(events, msg.budget)
-
-    await ctx.send(sender, EventSearchResponse(
-        events=filtered_events,
-        search_query=query,
-        total_found=len(filtered_events)
-    ))
-
-event_finder.include(event_protocol)
-```
-
-### Agent 2: Itinerary Planner Agent
-
-**Purpose:** Uses Gemini API to create structured, optimized itineraries.
+**Purpose:** Discovers events based on user criteria using SerpAPI Google Events.
 
 ```python
-from uagents import Agent, Context, Model, Protocol
-import google.generativeai as genai
-from pydantic import BaseModel
-from typing import List
-import json
+from services import SerpAPIService
 
-class ItineraryEvent(BaseModel):
-    title: str
-    start_time: str
-    end_time: str
-    location: str
-    description: str
-    ticket_info: str = ""
-    estimated_cost: float = 0.0
-
-class ItineraryRequest(Model):
-    events: list
-    date: str
-    city: str
-    budget: str
-    preferences: str = ""
-
-class ItineraryResponse(Model):
-    itinerary: list  # List of ItineraryEvent dicts
-    total_estimated_cost: float
-    summary: str
-
-itinerary_planner = Agent(
-    name="itinerary_planner",
-    seed="itinerary_planner_seed_phrase",
-    port=8002,
-    endpoint=["http://localhost:8002/submit"]
+serpapi_service = SerpAPIService(api_key="your_key")
+events = await serpapi_service.search_events(
+    city="Boston",
+    state="MA", 
+    date="2024-02-01",
+    budget="$20-$50",
+    preferences="music"
 )
-
-itinerary_protocol = Protocol("ItineraryPlanning")
-
-@itinerary_protocol.on_message(model=ItineraryRequest, replies=ItineraryResponse)
-async def plan_itinerary(ctx: Context, sender: str, msg: ItineraryRequest):
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    model = genai.GenerativeModel("gemini-2.0-flash")
-
-    prompt = f"""
-    Create an optimized day itinerary from these events for {msg.date} in {msg.city}.
-    Budget: {msg.budget}
-    User preferences: {msg.preferences}
-
-    Available events:
-    {json.dumps(msg.events, indent=2)}
-
-    Return a JSON array with this exact structure:
-    [
-        {{
-            "title": "Event name",
-            "start_time": "HH:MM",
-            "end_time": "HH:MM",
-            "location": "Full address",
-            "description": "Brief description",
-            "ticket_info": "Price or 'Free'",
-            "estimated_cost": 0.00
-        }}
-    ]
-
-    Order events chronologically. Include travel time considerations.
-    Stay within budget. Select 3-5 best events that fit the user's preferences.
-    """
-
-    response = model.generate_content(
-        prompt,
-        generation_config={
-            "response_mime_type": "application/json"
-        }
-    )
-
-    itinerary_data = json.loads(response.text)
-    total_cost = sum(e.get("estimated_cost", 0) for e in itinerary_data)
-
-    await ctx.send(sender, ItineraryResponse(
-        itinerary=itinerary_data,
-        total_estimated_cost=total_cost,
-        summary=f"Your {msg.city} adventure with {len(itinerary_data)} events"
-    ))
-
-itinerary_planner.include(itinerary_protocol)
 ```
 
-### Agent 3: Calendar Export Agent
+### Gemini Service
+
+**Purpose:** Uses Gemini 2.0 Flash to create structured, optimized itineraries.
+
+```python
+from services import GeminiService
+
+gemini_service = GeminiService(api_key="your_key", model_name="gemini-2.0-flash")
+itinerary = await gemini_service.plan_itinerary(
+    events=events,
+    date="2024-02-01",
+    city="Boston",
+    budget="$20-$50",
+    preferences="music"
+)
+```
+
+### Calendar Service
 
 **Purpose:** Generates .ics calendar files from itineraries.
 
 ```python
-from uagents import Agent, Context, Model, Protocol
-from icalendar import Calendar, Event
-from datetime import datetime, timedelta
-import uuid
+from services import CalendarService
 
-class CalendarExportRequest(Model):
-    itinerary: list
-    date: str
-    timezone: str = "America/New_York"
-
-class CalendarExportResponse(Model):
-    ics_content: str
-    filename: str
-    event_count: int
-
-calendar_agent = Agent(
-    name="calendar_export",
-    seed="calendar_export_seed_phrase",
-    port=8003,
-    endpoint=["http://localhost:8003/submit"]
+calendar_service = CalendarService()
+ics_content = calendar_service.generate_ics(
+    itinerary=itinerary,
+    date="2024-02-01",
+    city="Boston"
 )
-
-calendar_protocol = Protocol("CalendarExport")
-
-@calendar_protocol.on_message(model=CalendarExportRequest, replies=CalendarExportResponse)
-async def export_calendar(ctx: Context, sender: str, msg: CalendarExportRequest):
-    cal = Calendar()
-    cal.add('prodid', '-//Metropolis Itinerary//metropolis.app//')
-    cal.add('version', '2.0')
-    cal.add('calscale', 'GREGORIAN')
-
-    base_date = datetime.strptime(msg.date, "%Y-%m-%d")
-
-    for item in msg.itinerary:
-        event = Event()
-        event.add('summary', item['title'])
-        event.add('description', item.get('description', ''))
-        event.add('location', item.get('location', ''))
-
-        # Parse times
-        start_time = datetime.strptime(item['start_time'], "%H:%M")
-        end_time = datetime.strptime(item['end_time'], "%H:%M")
-
-        event.add('dtstart', base_date.replace(
-            hour=start_time.hour,
-            minute=start_time.minute
-        ))
-        event.add('dtend', base_date.replace(
-            hour=end_time.hour,
-            minute=end_time.minute
-        ))
-        event.add('uid', str(uuid.uuid4()))
-
-        cal.add_component(event)
-
-    ics_content = cal.to_ical().decode('utf-8')
-
-    await ctx.send(sender, CalendarExportResponse(
-        ics_content=ics_content,
-        filename=f"metropolis_itinerary_{msg.date}.ics",
-        event_count=len(msg.itinerary)
-    ))
-
-calendar_agent.include(calendar_protocol)
-```
-
-### Agent Bureau (Orchestrator)
-
-```python
-from uagents import Bureau
-
-bureau = Bureau()
-bureau.add(event_finder)
-bureau.add(itinerary_planner)
-bureau.add(calendar_agent)
-
-if __name__ == "__main__":
-    bureau.run()
 ```
 
 ---
@@ -369,37 +173,40 @@ if __name__ == "__main__":
 ```
 backend/
 ├── main.py                 # FastAPI app entry point
-├── agents/
-│   ├── __init__.py
-│   ├── event_finder.py     # Event Finder Agent
-│   ├── itinerary_planner.py # Itinerary Planner Agent
-│   ├── calendar_export.py  # Calendar Export Agent
-│   └── bureau.py           # Agent orchestrator
+├── config.py               # Centralized configuration
+├── requirements.txt        # Dependencies
+├── .env                    # Environment variables
 ├── api/
-│   ├── __init__.py
-│   ├── routes.py           # API endpoints
-│   └── models.py           # Pydantic models
-├── services/
-│   ├── __init__.py
-│   ├── serpapi_service.py  # SerpAPI integration
-│   ├── gemini_service.py   # Gemini API integration
-│   └── calendar_service.py # ICS generation
-├── config.py               # Configuration settings
-└── requirements.txt
+│   └── __init__.py
+└── services/
+    ├── __init__.py
+    ├── serpapi_service.py  # Event search
+    ├── gemini_service.py   # AI itinerary planning  
+    └── services/
+    ├── __init__.py
+    ├── serpapi_service.py  # Event search
+    ├── gemini_service.py   # AI itinerary planning  
+    └── calendar_service.py # ICS generation
 ```
 
 ### Main FastAPI Application
 
 ```python
 # main.py
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
-import asyncio
-import uuid
 from datetime import datetime
+from dotenv import load_dotenv
+import uuid
+
+load_dotenv()
+
+from services import SerpAPIService, GeminiService, CalendarService
+from config import get_settings
+
+settings = get_settings()
 
 app = FastAPI(
     title="Metropolis API",
@@ -415,6 +222,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Initialize services
+serpapi_service = SerpAPIService(api_key=settings.serpapi_key)
+gemini_service = GeminiService(api_key=settings.gemini_api_key)
+calendar_service = CalendarService()
+
 # Request/Response Models
 class SearchRequest(BaseModel):
     city: str
@@ -423,23 +235,14 @@ class SearchRequest(BaseModel):
     budget: str  # "$0", "$1-$20", "$20-$50", "$50+"
     preferences: Optional[str] = ""
 
-class EventItem(BaseModel):
-    title: str
-    date: str
-    time: str
-    location: str
-    description: str
-    ticket_info: Optional[str] = ""
-    thumbnail: Optional[str] = ""
-
 class ItineraryItem(BaseModel):
     title: str
     start_time: str
     end_time: str
     location: str
     description: str
-    ticket_info: str
-    estimated_cost: float
+    ticket_info: str = ""
+    estimated_cost: float = 0.0
 
 class ItineraryResponse(BaseModel):
     itinerary_id: str
@@ -449,35 +252,32 @@ class ItineraryResponse(BaseModel):
     date: str
     city: str
 
-# In-memory storage (use Redis/DB in production)
+# In-memory storage
 itineraries_store = {}
 
 @app.post("/api/generate-itinerary", response_model=ItineraryResponse)
 async def generate_itinerary(request: SearchRequest):
-    """
-    Main endpoint that orchestrates all agents:
-    1. Event Finder Agent searches for events
-    2. Itinerary Planner Agent creates optimized schedule
-    3. Returns structured itinerary
-    """
+    """Main endpoint that orchestrates event discovery and itinerary planning"""
     try:
-        # Step 1: Search for events (Event Finder Agent)
-        events = await search_events_with_agent(request)
+        # Step 1: Search for events using SerpAPI
+        events = await serpapi_service.search_events(
+            request.city, request.state, request.date,
+            request.budget, request.preferences
+        )
 
         if not events:
-            raise HTTPException(
-                status_code=404,
-                detail="No events found for your criteria"
-            )
+            raise HTTPException(status_code=404, detail="No events found")
 
-        # Step 2: Generate itinerary (Itinerary Planner Agent)
-        itinerary = await plan_itinerary_with_agent(
+        # Step 2: Generate itinerary with Gemini
+        itinerary_data = await gemini_service.plan_itinerary(
             events=events,
             date=request.date,
             city=request.city,
             budget=request.budget,
             preferences=request.preferences
         )
+
+        itinerary = [ItineraryItem(**item) for item in itinerary_data]
 
         # Store for later ICS export
         itinerary_id = str(uuid.uuid4())
@@ -495,35 +295,27 @@ async def generate_itinerary(request: SearchRequest):
             date=request.date,
             city=request.city
         )
-
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/export-ics/{itinerary_id}")
 async def export_ics(itinerary_id: str):
-    """
-    Export itinerary as .ics calendar file
-    Uses Calendar Export Agent
-    """
+    """Export itinerary as .ics calendar file"""
     if itinerary_id not in itineraries_store:
         raise HTTPException(status_code=404, detail="Itinerary not found")
 
     data = itineraries_store[itinerary_id]
-
-    # Generate ICS with Calendar Agent
-    ics_content = await generate_ics_with_agent(
-        itinerary=data["itinerary"],
-        date=data["date"]
+    ics_content = calendar_service.generate_ics(
+        data["itinerary"], data["date"], data["city"]
     )
-
     filename = f"metropolis_{data['city']}_{data['date']}.ics"
 
     return Response(
         content=ics_content,
         media_type="text/calendar",
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}"
-        }
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 @app.get("/api/health")
@@ -535,15 +327,15 @@ async def health_check():
 
 ```txt
 # requirements.txt
-fastapi==0.109.0
-uvicorn==0.27.0
-uagents==0.14.0
-google-search-results==2.4.2
-google-generativeai==0.4.0
-icalendar==5.0.11
-pydantic==2.5.3
-python-dotenv==1.0.0
-httpx==0.26.0
+fastapi>=0.109.0
+uvicorn>=0.27.0
+google-search-results>=2.4.2
+google-generativeai>=0.4.0
+icalendar>=5.0.11
+pydantic>=2.8,<2.9
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+httpx>=0.26.0
 ```
 
 ---
