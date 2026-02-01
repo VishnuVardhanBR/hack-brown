@@ -35,13 +35,24 @@ export const DatePickerScreen: React.FC<DatePickerScreenProps> = ({ navigation, 
     const today = new Date();
     const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
     const [selectedYear, setSelectedYear] = useState(today.getFullYear());
-    const [selectedDate, setSelectedDate] = useState<number | null>(null);
+    const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
 
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const titleTranslateY = useRef(new Animated.Value(-30)).current;
     const calendarFadeAnim = useRef(new Animated.Value(0)).current;
     const buttonFadeAnim = useRef(new Animated.Value(0)).current;
+
+    // Helper to create a date string
+    const createDateString = (year: number, month: number, day: number): string => {
+        return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    };
+
+    // Check if a date is selected
+    const isDateSelected = (day: number): boolean => {
+        const dateString = createDateString(selectedYear, selectedMonth, day);
+        return selectedDates.has(dateString);
+    };
 
     useEffect(() => {
         Animated.sequence([
@@ -88,7 +99,7 @@ export const DatePickerScreen: React.FC<DatePickerScreenProps> = ({ navigation, 
         } else {
             setSelectedMonth(selectedMonth - 1);
         }
-        setSelectedDate(null);
+        // Don't clear selections when changing months - allow multi-month selection
     };
 
     const handleNextMonth = () => {
@@ -98,27 +109,37 @@ export const DatePickerScreen: React.FC<DatePickerScreenProps> = ({ navigation, 
         } else {
             setSelectedMonth(selectedMonth + 1);
         }
-        setSelectedDate(null);
+        // Don't clear selections when changing months - allow multi-month selection
     };
 
     const handlePreviousYear = () => {
         setSelectedYear(selectedYear - 1);
-        setSelectedDate(null);
+        // Don't clear selections when changing years
     };
 
     const handleNextYear = () => {
         setSelectedYear(selectedYear + 1);
-        setSelectedDate(null);
+        // Don't clear selections when changing years
     };
 
     const handleDateSelect = (day: number) => {
-        setSelectedDate(day);
+        const dateString = createDateString(selectedYear, selectedMonth, day);
+        setSelectedDates(prevDates => {
+            const newDates = new Set(prevDates);
+            if (newDates.has(dateString)) {
+                newDates.delete(dateString);
+            } else {
+                newDates.add(dateString);
+            }
+            return newDates;
+        });
     };
 
     const handleNext = () => {
-        if (selectedDate) {
-            const formattedDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
-            navigation.navigate('Preferences', { city, budget, date: formattedDate });
+        if (selectedDates.size > 0) {
+            // Convert Set to sorted array
+            const datesArray = Array.from(selectedDates).sort();
+            navigation.navigate('Preferences', { city, budget, dates: datesArray });
         }
     };
 
@@ -142,7 +163,7 @@ export const DatePickerScreen: React.FC<DatePickerScreenProps> = ({ navigation, 
 
         // Add cells for each day of the month
         for (let day = 1; day <= daysInMonth; day++) {
-            const isSelected = day === selectedDate;
+            const isSelected = isDateSelected(day);
             const isToday = day === today.getDate() &&
                 selectedMonth === today.getMonth() &&
                 selectedYear === today.getFullYear();
@@ -199,7 +220,10 @@ export const DatePickerScreen: React.FC<DatePickerScreenProps> = ({ navigation, 
                     },
                 ]}
             >
-                <Text style={styles.titleText}>Select a Date.</Text>
+                <Text style={styles.titleText}>Select Date(s).</Text>
+                {selectedDates.size > 0 && (
+                    <Text style={styles.subtitleText}>{selectedDates.size} day{selectedDates.size > 1 ? 's' : ''} selected</Text>
+                )}
             </Animated.View>
 
             {/* Calendar */}
@@ -256,13 +280,13 @@ export const DatePickerScreen: React.FC<DatePickerScreenProps> = ({ navigation, 
             {/* Next Button */}
             <Animated.View style={[styles.buttonContainer, { opacity: buttonFadeAnim }]}>
                 <TouchableOpacity
-                    style={[styles.nextButton, !selectedDate && styles.nextButtonDisabled]}
+                    style={[styles.nextButton, selectedDates.size === 0 && styles.nextButtonDisabled]}
                     onPress={handleNext}
                     activeOpacity={0.8}
-                    disabled={!selectedDate}
+                    disabled={selectedDates.size === 0}
                 >
-                    <Text style={[styles.nextButtonText, !selectedDate && styles.nextButtonTextDisabled]}>
-                        Next
+                    <Text style={[styles.nextButtonText, selectedDates.size === 0 && styles.nextButtonTextDisabled]}>
+                        {selectedDates.size > 0 ? `Next (${selectedDates.size} day${selectedDates.size > 1 ? 's' : ''})` : 'Next'}
                     </Text>
                 </TouchableOpacity>
             </Animated.View>
@@ -314,6 +338,12 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         color: colors.textPrimary,
         letterSpacing: -1,
+    },
+    subtitleText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.primary,
+        marginTop: 8,
     },
     calendarContainer: {
         marginTop: 30,

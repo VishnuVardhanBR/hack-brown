@@ -28,7 +28,7 @@ interface PreferencesScreenProps {
 }
 
 export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation, route }) => {
-    const { city, budget, date } = route.params || {};
+    const { city, budget, dates } = route.params || {};
     const [preferences, setPreferences] = useState('');
 
     // Animation values
@@ -68,13 +68,18 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
     }, []);
 
     const handleNext = () => {
-        // Navigate to next screen (Itinerary/Loading) with all collected data
-        navigation.navigate('Loading', { city, budget, date, preferences });
+        // TODO: Navigate to Loading/Itinerary screen when implemented
+        // For now, show an alert with collected data
+        const message = `Trip planned!\n\nCity: ${getCityName()}\nBudget: $${budget}\nDates: ${dates?.length || 0} day(s)\nPreferences: ${preferences || 'None'}`;
+        alert(message);
+        console.log('Trip data:', { city, budget, dates, preferences });
     };
 
     const handleSkip = () => {
-        // Navigate without preferences
-        navigation.navigate('Loading', { city, budget, date, preferences: '' });
+        // TODO: Navigate to Loading/Itinerary screen when implemented
+        const message = `Trip planned!\n\nCity: ${getCityName()}\nBudget: $${budget}\nDates: ${dates?.length || 0} day(s)\nPreferences: None`;
+        alert(message);
+        console.log('Trip data:', { city, budget, dates, preferences: '' });
     };
 
     const handleBack = () => {
