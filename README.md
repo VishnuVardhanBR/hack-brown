@@ -13,7 +13,7 @@ OughtToSee is a mobile application that leverages autonomous AI agents to discov
 ### Autonomous AI Agents
 - **Event Finder Agent** - Discovers events via SerpAPI's Google Events engine
 - **Itinerary Planner Agent** - Uses Google Gemini AI to build optimized day plans considering travel times and costs
-- **Calendar Export Agent** - Generates `.ics` files for seamless calendar integration
+
 
 ### Smart Itinerary Generation
 Tell us **where**, **when**, **how much**, and **what** - OughtToSee creates a complete, coherent schedule in seconds.
@@ -24,7 +24,6 @@ Tell us **where**, **when**, **how much**, and **what** - OughtToSee creates a c
 - Aerial view visualization
 
 ### Export Options
-- **ICS Export** - Add to Google Calendar, Apple Calendar, or Outlook
 - **PDF Export** - Beautiful formatted itinerary document
 
 ---
@@ -39,7 +38,7 @@ Tell us **where**, **when**, **how much**, and **what** - OughtToSee creates a c
 | **AI** | Google Gemini 2.0 Flash |
 | **Event Data** | SerpAPI (Google Events) |
 | **Maps** | Google Maps Platform (Geocoding, Directions, Aerial View) |
-| **Calendar** | iCalendar (ics generation) |
+
 
 ---
 
@@ -82,7 +81,7 @@ hack-brown/
 │   └── services/
 │       ├── serpapi_service.py    # Event discovery
 │       ├── gemini_service.py     # AI itinerary planning
-│       ├── calendar_service.py   # ICS generation
+
 │       ├── geocoding_service.py  # Location geocoding
 │       └── directions_service.py # Route planning
 │
@@ -198,7 +197,7 @@ hack-brown/
 |--------|----------|-------------|
 | `POST` | `/api/generate-itinerary` | Generate AI-powered itinerary |
 | `POST` | `/api/recalculate-itinerary` | Regenerate with new preferences |
-| `GET` | `/api/export-ics/{itinerary_id}` | Export as ICS calendar file |
+
 | `GET` | `/api/export-pdf/{itinerary_id}` | Export as PDF document |
 | `POST` | `/api/geocode-itinerary` | Geocode all event locations |
 | `POST` | `/api/get-route` | Get route between stops |
