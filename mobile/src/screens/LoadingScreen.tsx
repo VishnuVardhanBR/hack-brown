@@ -14,7 +14,7 @@ import { API_BASE_URL } from '../config/api';
 
 const { width, height } = Dimensions.get('window');
 
-// Import video assets
+// Video assets for city backgrounds
 const videos: { [key: string]: any } = {
     'San Francisco': require('../assets/sf.mp4'),
     'New York': require('../assets/nyc.mp4'),
@@ -27,7 +27,7 @@ interface LoadingScreenProps {
 }
 
 export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route }) => {
-    const { city, budget, dates, preferences } = route.params || {};
+    const { city, budget, dates, preferences, isRecalculating } = route.params || {};
     const videoRef = useRef<Video>(null);
     const [isReversing, setIsReversing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -53,7 +53,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
 
     const cityName = getCityName();
     const cityState = getCityState();
-    const videoSource = videos[cityName] || videos['San Francisco'];
+    const videoSource = videos[cityName] || null;
 
     useEffect(() => {
         // Fade in the screen
@@ -79,8 +79,8 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
         setIsLoading(true);
 
         try {
-            // Get the first date from dates array, or use today
-            const date = dates && dates.length > 0 ? dates[0] : new Date().toISOString().split('T')[0];
+            // Get dates array or use today as fallback
+            const datesArray = dates && dates.length > 0 ? dates : [new Date().toISOString().split('T')[0]];
 
             const response = await fetch(`${API_BASE_URL}/generate-itinerary`, {
                 method: 'POST',
@@ -90,7 +90,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
                 body: JSON.stringify({
                     city: cityName,
                     state: cityState,
-                    date: date,
+                    dates: datesArray,
                     budget: formatBudget(budget),
                     preferences: preferences || '',
                 }),
@@ -108,7 +108,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
                 itineraryId: data.itinerary_id,
                 totalCost: data.total_cost,
                 city: cityName,
-                date: date,
+                dates: datesArray,
                 summary: data.summary,
             });
         } catch (err: any) {
@@ -166,16 +166,18 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
                 <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
                 {/* Video Background */}
-                <Video
-                    ref={videoRef}
-                    source={videoSource}
-                    style={styles.video}
-                    resizeMode={ResizeMode.COVER}
-                    isLooping
-                    shouldPlay
-                    isMuted
-                    onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-                />
+                {videoSource && (
+                    <Video
+                        ref={videoRef}
+                        source={videoSource}
+                        style={styles.video}
+                        resizeMode={ResizeMode.COVER}
+                        isLooping
+                        shouldPlay
+                        isMuted
+                        onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+                    />
+                )}
 
                 {/* Purple Overlay */}
                 <View style={styles.overlay} />
@@ -211,16 +213,18 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             {/* Video Background */}
-            <Video
-                ref={videoRef}
-                source={videoSource}
-                style={styles.video}
-                resizeMode={ResizeMode.COVER}
-                isLooping
-                shouldPlay
-                isMuted
-                onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-            />
+            {videoSource && (
+                <Video
+                    ref={videoRef}
+                    source={videoSource}
+                    style={styles.video}
+                    resizeMode={ResizeMode.COVER}
+                    isLooping
+                    shouldPlay
+                    isMuted
+                    onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+                />
+            )}
 
             {/* Purple Overlay */}
             <Animated.View style={[styles.overlay, { opacity: fadeAnim }]} />

@@ -8,12 +8,7 @@ import {
     Dimensions,
     StatusBar,
     Animated,
-    TextInput,
-    KeyboardAvoidingView,
-    Platform,
     ScrollView,
-    Keyboard,
-    TouchableWithoutFeedback,
 } from 'react-native';
 import { colors } from '../theme/colors';
 
@@ -41,13 +36,11 @@ const PREFERENCE_OPTIONS = [
 export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation, route }) => {
     const { city, budget, dates } = route.params || {};
     const [selectedPreferences, setSelectedPreferences] = useState<string[]>([]);
-    const [additionalPreferences, setAdditionalPreferences] = useState('');
 
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const titleTranslateY = useRef(new Animated.Value(-30)).current;
     const optionsFadeAnim = useRef(new Animated.Value(0)).current;
-    const inputFadeAnim = useRef(new Animated.Value(0)).current;
     const buttonFadeAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -71,13 +64,7 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
                 duration: 500,
                 useNativeDriver: true,
             }),
-            // 3. Fade in text input
-            Animated.timing(inputFadeAnim, {
-                toValue: 1,
-                duration: 400,
-                useNativeDriver: true,
-            }),
-            // 4. Fade in buttons
+            // 3. Fade in buttons
             Animated.timing(buttonFadeAnim, {
                 toValue: 1,
                 duration: 400,
@@ -96,21 +83,17 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
     };
 
     const handleNext = () => {
-        // Combine selected preferences and additional text
+        // Get selected preference labels to pass to next screen
         const selectedLabels = selectedPreferences
             .map(id => PREFERENCE_OPTIONS.find(p => p.id === id)?.label.split(' ').slice(1).join(' '))
             .filter(Boolean)
             .join(', ');
 
-        const combinedPreferences = [selectedLabels, additionalPreferences]
-            .filter(Boolean)
-            .join('. ');
-
-        navigation.navigate('Loading', {
+        navigation.navigate('AdditionalPreferences', {
             city,
             budget,
             dates,
-            preferences: combinedPreferences || ''
+            selectedPreferences: selectedLabels
         });
     };
 
@@ -127,107 +110,81 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
     };
     const cityName = getCityName();
 
-    const hasAnyPreferences = selectedPreferences.length > 0 || additionalPreferences.trim().length > 0;
-
     return (
-        <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 20}
-        >
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
-                >
-                    <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        <View style={styles.container}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
+                <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-                    {/* Back Button */}
-                    <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-                        <Text style={styles.backArrow}>←</Text>
-                    </TouchableOpacity>
+                {/* Back Button */}
+                <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                    <Text style={styles.backArrow}>←</Text>
+                </TouchableOpacity>
 
-                    {/* Logo at top */}
-                    <View style={styles.logoContainer}>
-                        <View style={styles.logoPlaceholder}>
-                            <Text style={styles.logoText}>LOGO</Text>
-                        </View>
+                {/* Logo at top */}
+                <View style={styles.logoContainer}>
+                    <View style={styles.logoPlaceholder}>
+                        <Text style={styles.logoText}>LOGO</Text>
                     </View>
+                </View>
 
-                    {/* Title */}
-                    <Animated.View
-                        style={[
-                            styles.titleContainer,
-                            {
-                                opacity: fadeAnim,
-                                transform: [{ translateY: titleTranslateY }],
-                            },
-                        ]}
-                    >
-                        <Text style={styles.titleText}>What interests you?</Text>
-                        <Text style={styles.subtitleText}>Select all that apply (optional)</Text>
-                    </Animated.View>
+                {/* Title */}
+                <Animated.View
+                    style={[
+                        styles.titleContainer,
+                        {
+                            opacity: fadeAnim,
+                            transform: [{ translateY: titleTranslateY }],
+                        },
+                    ]}
+                >
+                    <Text style={styles.titleText}>What interests you?</Text>
+                    <Text style={styles.subtitleText}>Select all that apply (optional)</Text>
+                </Animated.View>
 
-                    {/* Preferences Grid */}
-                    <Animated.View style={[styles.optionsContainer, { opacity: optionsFadeAnim }]}>
-                        <View style={styles.optionsGrid}>
-                            {PREFERENCE_OPTIONS.map((option) => {
-                                const isSelected = selectedPreferences.includes(option.id);
-                                return (
-                                    <TouchableOpacity
-                                        key={option.id}
+                {/* Preferences Grid */}
+                <Animated.View style={[styles.optionsContainer, { opacity: optionsFadeAnim }]}>
+                    <View style={styles.optionsGrid}>
+                        {PREFERENCE_OPTIONS.map((option) => {
+                            const isSelected = selectedPreferences.includes(option.id);
+                            return (
+                                <TouchableOpacity
+                                    key={option.id}
+                                    style={[
+                                        styles.optionCard,
+                                        isSelected && styles.optionCardSelected,
+                                    ]}
+                                    onPress={() => togglePreference(option.id)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={styles.optionEmoji}>{option.emoji}</Text>
+                                    <Text
                                         style={[
-                                            styles.optionCard,
-                                            isSelected && styles.optionCardSelected,
+                                            styles.optionLabel,
+                                            isSelected && styles.optionLabelSelected,
                                         ]}
-                                        onPress={() => togglePreference(option.id)}
-                                        activeOpacity={0.7}
                                     >
-                                        <Text style={styles.optionEmoji}>{option.emoji}</Text>
-                                        <Text
-                                            style={[
-                                                styles.optionLabel,
-                                                isSelected && styles.optionLabelSelected,
-                                            ]}
-                                        >
-                                            {option.label.split(' ').slice(1).join(' ')}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-                    </Animated.View>
+                                        {option.label.split(' ').slice(1).join(' ')}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                </Animated.View>
 
-                    {/* Additional Preferences Text Input */}
-                    <Animated.View style={[styles.inputContainer, { opacity: inputFadeAnim }]}>
-                        <Text style={styles.inputLabel}>Anything else?</Text>
-                        <TextInput
-                            style={styles.textInput}
-                            placeholder="e.g., Vegan, wheelchair accessible..."
-                            placeholderTextColor={colors.disabled}
-                            value={additionalPreferences}
-                            onChangeText={setAdditionalPreferences}
-                            multiline={true}
-                            scrollEnabled={true}
-                            textAlignVertical="top"
-                        />
-                    </Animated.View>
-
-                    {/* Buttons */}
-                    <Animated.View style={[styles.buttonsSection, { opacity: buttonFadeAnim }]}>
-                        <TouchableOpacity
-                            style={styles.nextButton}
-                            onPress={handleNext}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.nextButtonText}>
-                                {hasAnyPreferences ? 'Continue' : 'Skip'}
-                            </Text>
-                        </TouchableOpacity>
-                    </Animated.View>
-                </ScrollView>
-            </TouchableWithoutFeedback>
+                {/* Buttons */}
+                <Animated.View style={[styles.buttonsSection, { opacity: buttonFadeAnim }]}>
+                    <TouchableOpacity
+                        style={styles.nextButton}
+                        onPress={handleNext}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={styles.nextButtonText}>Continue</Text>
+                    </TouchableOpacity>
+                </Animated.View>
+            </ScrollView>
 
             {/* City Skyline Background */}
             <View style={styles.skylineContainer} pointerEvents="none">
@@ -237,7 +194,7 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
                     resizeMode="cover"
                 />
             </View>
-        </KeyboardAvoidingView>
+        </View>
     );
 };
 
@@ -331,32 +288,7 @@ const styles = StyleSheet.create({
     optionLabelSelected: {
         color: colors.primary,
     },
-    inputContainer: {
-        marginTop: 20,
-        paddingHorizontal: 24,
-    },
-    inputLabel: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: colors.textPrimary,
-        marginBottom: 10,
-    },
-    textInput: {
-        backgroundColor: colors.cardBackground,
-        borderRadius: 16,
-        paddingHorizontal: 20,
-        paddingVertical: 14,
-        fontSize: 16,
-        color: colors.textPrimary,
-        borderWidth: 2,
-        borderColor: colors.border,
-        height: 80,
-        shadowColor: colors.darkPurple,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
-    },
+
     skylineContainer: {
         position: 'absolute',
         bottom: 0,

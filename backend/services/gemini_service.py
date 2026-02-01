@@ -17,7 +17,7 @@ class GeminiService:
     async def plan_itinerary(
         self,
         events: List[Dict[str, Any]],
-        date: str,
+        dates: List[str],
         city: str,
         budget: str,
         preferences: str = ""
@@ -27,7 +27,7 @@ class GeminiService:
         
         Args:
             events: List of event data from SerpAPI
-            date: Target date (YYYY-MM-DD)
+            dates: List of target dates (YYYY-MM-DD format)
             city: City name
             budget: Budget tier
             preferences: User preferences
@@ -41,25 +41,52 @@ class GeminiService:
 IMPORTANT - User's Interests: {preferences}
 Prioritize events that match these interests! Only include events that align with what the user wants to do.
 """
+        
+        # Format dates for the prompt
+        num_days = len(dates)
+        dates_str = ", ".join(dates)
+        
+        if num_days == 1:
+            day_planning = f"Create a fun, optimized day plan for {dates[0]} in {city}."
+            event_count = "3-5 events"
+        else:
+            day_planning = f"Create a fun, optimized {num_days}-day plan for {city} covering these dates: {dates_str}."
+            event_count = f"3-5 events PER DAY ({num_days * 3}-{num_days * 5} total events)"
 
-        prompt = f"""You are an expert itinerary planner. Create a fun, optimized day plan for {date} in {city}.
+        # Define budget limits for each tier
+        budget_limits = {
+            "$0": (0, "ONLY include FREE events. estimated_cost must be 0 for all events."),
+            "$1-$20": (20, "Each event must cost $20 or less. Prefer free/low-cost options."),
+            "$20-$50": (50, "Each event must cost $50 or less."),
+            "$50+": (100, "Higher budget available, but still be cost-conscious.")
+        }
+        budget_max, budget_instruction = budget_limits.get(budget, (50, "Be cost-conscious."))
 
-Budget: {budget}
+        prompt = f"""You are an expert itinerary planner. {day_planning}
+
+BUDGET CONSTRAINT - CRITICAL:
+- User's budget tier: {budget}
+- {budget_instruction}
+- Set realistic estimated_cost values based on actual ticket prices
+- If an event is free, set estimated_cost to 0.00
 {pref_instruction}
 Available events in the city:
 {json.dumps(events, indent=2)}
 
 YOUR TASK:
-1. SELECT 3-5 events that best match the user's interests and budget
+1. SELECT {event_count} that STRICTLY fit the budget ({budget}) and match user interests
 2. SCHEDULE them in a logical order with realistic timing
 3. Consider travel time between venues (15-30 min)
 4. Include breaks for meals if needed
-5. Start around 10am, end by 10-11pm
+5. Start around 10am, end by 10-11pm each day
+6. Distribute events evenly across all dates: {dates_str}
+7. VERIFY each event's estimated_cost respects the budget limit
 
 Return ONLY a JSON array with this exact structure:
 [
     {{
         "title": "Event name",
+        "date": "YYYY-MM-DD",
         "start_time": "HH:MM",
         "end_time": "HH:MM",
         "location": "Full address",
@@ -68,6 +95,9 @@ Return ONLY a JSON array with this exact structure:
         "estimated_cost": 0.00
     }}
 ]
+
+IMPORTANT: Each event MUST have a "date" field set to one of these dates: {dates_str}
+Sort the events by date first, then by start_time.
 """
 
         try:
