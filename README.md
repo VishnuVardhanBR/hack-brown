@@ -43,6 +43,34 @@ Tell us **where**, **when**, **how much**, and **what** - OughtToSee creates a c
 
 ---
 
+### Primary Colors
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Very Light Pink | `#F9EAEC` | Background/Base (29.3%) |
+| Soft Pink | `#E9C2CA` | Primary Accent (13.3%) |
+| Purple | `#9367AB` | Primary Brand Color (8.5%) |
+
+### Secondary Colors
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Lavender | `#CBABD0` | Secondary backgrounds, cards (9.1%) |
+| Rose Pink | `#D7A7B5` | Highlights, borders (8.2%) |
+| Medium Purple | `#C285B6` | Interactive elements (7.4%) |
+
+### Accent Colors
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Deep Purple | `#734DA1` | CTAs, buttons (6.6%) |
+| Light Purple | `#A68EC3` | Hover states, icons (5.8%) |
+| Dark Purple | `#59377A` | Secondary buttons (3.8%) |
+
+### Text Colors
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Very Dark Purple | `#3A1F41` | Primary text, headings (1.6%) |
+| White | `#FFFFFF` | Text on dark backgrounds |
+
+---
 ## Project Structure
 
 ```
