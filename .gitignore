@@ -43,3 +43,6 @@ coverage/
 .vscode/
 *.swp
 *.swo
+
+# Large video files
+mobile/src/assets/*.mp4
