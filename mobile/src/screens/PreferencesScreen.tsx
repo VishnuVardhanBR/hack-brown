@@ -27,13 +27,26 @@ interface PreferencesScreenProps {
     route: any;
 }
 
+const PREFERENCE_OPTIONS = [
+    { id: 'music', label: '🎵 Music & Concerts', emoji: '🎵' },
+    { id: 'food', label: '🍽️ Food & Dining', emoji: '🍽️' },
+    { id: 'art', label: '🎨 Art & Museums', emoji: '🎨' },
+    { id: 'sports', label: '⚽ Sports', emoji: '⚽' },
+    { id: 'nightlife', label: '🌃 Nightlife', emoji: '🌃' },
+    { id: 'outdoor', label: '🌳 Outdoor Activities', emoji: '🌳' },
+    { id: 'theater', label: '🎭 Theater & Shows', emoji: '🎭' },
+    { id: 'family', label: '👨‍👩‍👧 Family Friendly', emoji: '👨‍👩‍👧' },
+];
+
 export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation, route }) => {
     const { city, budget, dates } = route.params || {};
-    const [preferences, setPreferences] = useState('');
+    const [selectedPreferences, setSelectedPreferences] = useState<string[]>([]);
+    const [additionalPreferences, setAdditionalPreferences] = useState('');
 
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const titleTranslateY = useRef(new Animated.Value(-30)).current;
+    const optionsFadeAnim = useRef(new Animated.Value(0)).current;
     const inputFadeAnim = useRef(new Animated.Value(0)).current;
     const buttonFadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -52,13 +65,19 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
                     useNativeDriver: true,
                 }),
             ]),
-            // 2. Fade in input
-            Animated.timing(inputFadeAnim, {
+            // 2. Fade in options grid
+            Animated.timing(optionsFadeAnim, {
                 toValue: 1,
                 duration: 500,
                 useNativeDriver: true,
             }),
-            // 3. Fade in buttons
+            // 3. Fade in text input
+            Animated.timing(inputFadeAnim, {
+                toValue: 1,
+                duration: 400,
+                useNativeDriver: true,
+            }),
+            // 4. Fade in buttons
             Animated.timing(buttonFadeAnim, {
                 toValue: 1,
                 duration: 400,
@@ -67,19 +86,39 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
         ]).start();
     }, []);
 
-    const handleNext = () => {
-        navigation.navigate('Loading', { city, budget, dates, preferences });
+    const togglePreference = (id: string) => {
+        setSelectedPreferences(prev => {
+            if (prev.includes(id)) {
+                return prev.filter(p => p !== id);
+            }
+            return [...prev, id];
+        });
     };
 
-    const handleSkip = () => {
-        navigation.navigate('Loading', { city, budget, dates, preferences: '' });
+    const handleNext = () => {
+        // Combine selected preferences and additional text
+        const selectedLabels = selectedPreferences
+            .map(id => PREFERENCE_OPTIONS.find(p => p.id === id)?.label.split(' ').slice(1).join(' '))
+            .filter(Boolean)
+            .join(', ');
+
+        const combinedPreferences = [selectedLabels, additionalPreferences]
+            .filter(Boolean)
+            .join('. ');
+
+        navigation.navigate('Loading', {
+            city,
+            budget,
+            dates,
+            preferences: combinedPreferences || ''
+        });
     };
 
     const handleBack = () => {
         navigation.goBack();
     };
 
-    // Extract city name for display - city can be an object, string, or undefined
+    // Extract city name for display
     const getCityName = () => {
         if (!city) return 'your destination';
         if (typeof city === 'object' && city.name) return city.name;
@@ -87,6 +126,8 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
         return 'your destination';
     };
     const cityName = getCityName();
+
+    const hasAnyPreferences = selectedPreferences.length > 0 || additionalPreferences.trim().length > 0;
 
     return (
         <KeyboardAvoidingView
@@ -124,26 +165,49 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
                             },
                         ]}
                     >
-                        <Text style={styles.titleText}>
-                            Any preferences to{'\n'}make your visit{'\n'}to <Text style={styles.cityHighlight}>{cityName}</Text> special?
-                        </Text>
+                        <Text style={styles.titleText}>What interests you?</Text>
+                        <Text style={styles.subtitleText}>Select all that apply (optional)</Text>
                     </Animated.View>
 
-                    {/* Example text */}
-                    <Animated.View style={[styles.exampleContainer, { opacity: fadeAnim }]}>
-                        <View style={styles.exampleBubble}>
-                            <Text style={styles.exampleText}>example: Vegan, art scene</Text>
+                    {/* Preferences Grid */}
+                    <Animated.View style={[styles.optionsContainer, { opacity: optionsFadeAnim }]}>
+                        <View style={styles.optionsGrid}>
+                            {PREFERENCE_OPTIONS.map((option) => {
+                                const isSelected = selectedPreferences.includes(option.id);
+                                return (
+                                    <TouchableOpacity
+                                        key={option.id}
+                                        style={[
+                                            styles.optionCard,
+                                            isSelected && styles.optionCardSelected,
+                                        ]}
+                                        onPress={() => togglePreference(option.id)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.optionEmoji}>{option.emoji}</Text>
+                                        <Text
+                                            style={[
+                                                styles.optionLabel,
+                                                isSelected && styles.optionLabelSelected,
+                                            ]}
+                                        >
+                                            {option.label.split(' ').slice(1).join(' ')}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </View>
                     </Animated.View>
 
-                    {/* Text Input */}
+                    {/* Additional Preferences Text Input */}
                     <Animated.View style={[styles.inputContainer, { opacity: inputFadeAnim }]}>
+                        <Text style={styles.inputLabel}>Anything else?</Text>
                         <TextInput
                             style={styles.textInput}
-                            placeholder="Enter your preferences..."
+                            placeholder="e.g., Vegan, wheelchair accessible..."
                             placeholderTextColor={colors.disabled}
-                            value={preferences}
-                            onChangeText={setPreferences}
+                            value={additionalPreferences}
+                            onChangeText={setAdditionalPreferences}
                             multiline={true}
                             scrollEnabled={true}
                             textAlignVertical="top"
@@ -153,22 +217,13 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
                     {/* Buttons */}
                     <Animated.View style={[styles.buttonsSection, { opacity: buttonFadeAnim }]}>
                         <TouchableOpacity
-                            style={[styles.nextButton, !preferences && styles.nextButtonDisabled]}
+                            style={styles.nextButton}
                             onPress={handleNext}
                             activeOpacity={0.8}
-                            disabled={!preferences}
                         >
-                            <Text style={[styles.nextButtonText, !preferences && styles.nextButtonTextDisabled]}>
-                                Next
+                            <Text style={styles.nextButtonText}>
+                                {hasAnyPreferences ? 'Continue' : 'Skip'}
                             </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.skipButton}
-                            onPress={handleSkip}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.skipButtonText}>Skip</Text>
                         </TouchableOpacity>
                     </Animated.View>
                 </ScrollView>
@@ -227,55 +282,80 @@ const styles = StyleSheet.create({
     titleContainer: {
         alignItems: 'flex-start',
         paddingHorizontal: 24,
-        marginTop: 40,
+        marginTop: 30,
     },
     titleText: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: '900',
         color: colors.textPrimary,
         letterSpacing: -0.5,
-        lineHeight: 32,
     },
-    cityHighlight: {
-        color: colors.primary,
-        textDecorationLine: 'underline',
-    },
-    exampleContainer: {
-        alignItems: 'center',
-        marginTop: 24,
-    },
-    exampleBubble: {
-        backgroundColor: colors.cardBackground,
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    exampleText: {
+    subtitleText: {
         fontSize: 14,
         color: colors.textSecondary,
-        fontStyle: 'italic',
+        marginTop: 6,
+    },
+    optionsContainer: {
+        marginTop: 20,
+        paddingHorizontal: 16,
+    },
+    optionsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+    },
+    optionCard: {
+        width: (width - 48) / 2,
+        backgroundColor: colors.cardBackground,
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 12,
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: colors.border,
+    },
+    optionCardSelected: {
+        borderColor: colors.primary,
+        backgroundColor: colors.lavender,
+    },
+    optionEmoji: {
+        fontSize: 28,
+        marginBottom: 8,
+    },
+    optionLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.textPrimary,
+        textAlign: 'center',
+    },
+    optionLabelSelected: {
+        color: colors.primary,
     },
     inputContainer: {
-        marginTop: 24,
+        marginTop: 20,
         paddingHorizontal: 24,
+    },
+    inputLabel: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: colors.textPrimary,
+        marginBottom: 10,
     },
     textInput: {
         backgroundColor: colors.cardBackground,
-        borderRadius: 20,
-        paddingHorizontal: 24,
-        paddingVertical: 16,
+        borderRadius: 16,
+        paddingHorizontal: 20,
+        paddingVertical: 14,
         fontSize: 16,
         color: colors.textPrimary,
         borderWidth: 2,
         borderColor: colors.border,
-        height: 70,
+        height: 80,
         shadowColor: colors.darkPurple,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
+        shadowOpacity: 0.1,
         shadowRadius: 8,
-        elevation: 5,
+        elevation: 3,
     },
     skylineContainer: {
         position: 'absolute',
@@ -291,48 +371,25 @@ const styles = StyleSheet.create({
         height: '100%',
     },
     buttonsSection: {
-        marginTop: 30,
+        marginTop: 24,
         alignItems: 'center',
         paddingHorizontal: 24,
     },
     nextButton: {
-        backgroundColor: colors.cardBackground,
-        paddingVertical: 14,
-        paddingHorizontal: 50,
-        borderRadius: 25,
-        borderWidth: 2,
-        borderColor: colors.textPrimary,
+        backgroundColor: colors.primary,
+        paddingVertical: 16,
+        paddingHorizontal: 60,
+        borderRadius: 30,
         shadowColor: colors.darkPurple,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
+        shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 5,
-        marginBottom: 12,
-    },
-    nextButtonDisabled: {
-        borderColor: colors.disabled,
     },
     nextButtonText: {
         fontSize: 18,
         fontWeight: '700',
-        color: colors.textPrimary,
-        textAlign: 'center',
-    },
-    nextButtonTextDisabled: {
-        color: colors.disabled,
-    },
-    skipButton: {
-        backgroundColor: colors.cardBackground,
-        paddingVertical: 12,
-        paddingHorizontal: 40,
-        borderRadius: 25,
-        borderWidth: 2,
-        borderColor: colors.textSecondary,
-    },
-    skipButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: colors.textSecondary,
+        color: colors.textLight,
         textAlign: 'center',
     },
 });

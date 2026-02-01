@@ -6,9 +6,11 @@ import {
     Dimensions,
     StatusBar,
     Animated,
+    TouchableOpacity,
 } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { colors } from '../theme/colors';
+import { API_BASE_URL } from '../config/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -25,9 +27,11 @@ interface LoadingScreenProps {
 }
 
 export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route }) => {
-    const { city } = route.params || {};
+    const { city, budget, dates, preferences } = route.params || {};
     const videoRef = useRef<Video>(null);
     const [isReversing, setIsReversing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -41,7 +45,14 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
         return 'San Francisco';
     };
 
+    const getCityState = () => {
+        if (!city) return 'CA';
+        if (typeof city === 'object' && city.state) return city.state;
+        return '';
+    };
+
     const cityName = getCityName();
+    const cityState = getCityState();
     const videoSource = videos[cityName] || videos['San Francisco'];
 
     useEffect(() => {
@@ -58,7 +69,69 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
                 useNativeDriver: true,
             }).start();
         });
+
+        // Call API to generate itinerary
+        generateItinerary();
     }, []);
+
+    const generateItinerary = async () => {
+        setError(null);
+        setIsLoading(true);
+
+        try {
+            // Get the first date from dates array, or use today
+            const date = dates && dates.length > 0 ? dates[0] : new Date().toISOString().split('T')[0];
+
+            const response = await fetch(`${API_BASE_URL}/generate-itinerary`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    city: cityName,
+                    state: cityState,
+                    date: date,
+                    budget: formatBudget(budget),
+                    preferences: preferences || '',
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || 'Failed to generate itinerary');
+            }
+
+            const data = await response.json();
+
+            navigation.replace('Itinerary', {
+                itinerary: data.events,
+                itineraryId: data.itinerary_id,
+                totalCost: data.total_cost,
+                city: cityName,
+                date: date,
+                summary: data.summary,
+            });
+        } catch (err: any) {
+            console.error('API Error:', err);
+            setIsLoading(false);
+            setError(err.message || 'Something went wrong. Please try again.');
+        }
+    };
+
+    const formatBudget = (budget: number): string => {
+        if (!budget || budget === 0) return '$0';
+        if (budget <= 20) return '$1-$20';
+        if (budget <= 50) return '$20-$50';
+        return '$50+';
+    };
+
+    const handleRetry = () => {
+        generateItinerary();
+    };
+
+    const handleGoBack = () => {
+        navigation.goBack();
+    };
 
     const handlePlaybackStatusUpdate = async (status: AVPlaybackStatus) => {
         if (!status.isLoaded || !videoRef.current) return;
@@ -85,6 +158,53 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ navigation, route 
             }
         }
     };
+
+    // Error state
+    if (error) {
+        return (
+            <View style={styles.container}>
+                <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+                {/* Video Background */}
+                <Video
+                    ref={videoRef}
+                    source={videoSource}
+                    style={styles.video}
+                    resizeMode={ResizeMode.COVER}
+                    isLooping
+                    shouldPlay
+                    isMuted
+                    onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+                />
+
+                {/* Purple Overlay */}
+                <View style={styles.overlay} />
+
+                {/* Error Content */}
+                <View style={styles.errorContent}>
+                    <View style={styles.logoContainer}>
+                        <View style={styles.logoPlaceholder}>
+                            <Text style={styles.logoText}>LOGO</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.errorContainer}>
+                        <Text style={styles.errorIcon}>😕</Text>
+                        <Text style={styles.errorTitle}>Oops!</Text>
+                        <Text style={styles.errorMessage}>{error}</Text>
+
+                        <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+                            <Text style={styles.retryButtonText}>Try Again</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
+                            <Text style={styles.backButtonText}>Go Back</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -153,6 +273,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingTop: 60,
     },
+    errorContent: {
+        flex: 1,
+        justifyContent: 'flex-start',
+        alignItems: 'center',
+        paddingTop: 60,
+    },
     logoContainer: {
         alignItems: 'center',
         marginTop: 20,
@@ -191,6 +317,49 @@ const styles = StyleSheet.create({
         textShadowColor: 'rgba(0, 0, 0, 0.3)',
         textShadowOffset: { width: 0, height: 2 },
         textShadowRadius: 4,
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 40,
+    },
+    errorIcon: {
+        fontSize: 60,
+        marginBottom: 20,
+    },
+    errorTitle: {
+        fontSize: 28,
+        fontWeight: '700',
+        color: colors.textLight,
+        marginBottom: 10,
+    },
+    errorMessage: {
+        fontSize: 16,
+        color: colors.textLight,
+        textAlign: 'center',
+        marginBottom: 30,
+        opacity: 0.8,
+    },
+    retryButton: {
+        backgroundColor: colors.textLight,
+        paddingVertical: 14,
+        paddingHorizontal: 40,
+        borderRadius: 25,
+        marginBottom: 16,
+    },
+    retryButtonText: {
+        color: colors.primary,
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    backButton: {
+        paddingVertical: 10,
+    },
+    backButtonText: {
+        color: colors.textLight,
+        fontSize: 16,
+        opacity: 0.8,
     },
 });
 
