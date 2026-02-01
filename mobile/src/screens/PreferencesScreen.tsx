@@ -94,7 +94,7 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ navigation
         <KeyboardAvoidingView
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 20}
         >
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <ScrollView
@@ -232,11 +232,11 @@ const styles = StyleSheet.create({
         marginTop: 40,
     },
     titleText: {
-        fontSize: 32,
+        fontSize: 24,
         fontWeight: '900',
         color: colors.textPrimary,
         letterSpacing: -0.5,
-        lineHeight: 42,
+        lineHeight: 32,
     },
     cityHighlight: {
         color: colors.primary,
@@ -265,15 +265,14 @@ const styles = StyleSheet.create({
     },
     textInput: {
         backgroundColor: colors.cardBackground,
-        borderRadius: 25,
+        borderRadius: 20,
         paddingHorizontal: 24,
         paddingVertical: 16,
         fontSize: 16,
         color: colors.textPrimary,
         borderWidth: 2,
         borderColor: colors.border,
-        minHeight: 80,
-        maxHeight: 120,
+        height: 70,
         shadowColor: colors.darkPurple,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
