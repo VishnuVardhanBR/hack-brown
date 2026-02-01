@@ -9,9 +9,9 @@ import {
     Dimensions,
     Platform,
     FlatList,
-    Image,
 } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { Video, ResizeMode } from 'expo-av';
+import { WebView } from 'react-native-webview';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
 import { colors } from '../theme/colors';
 import { API_BASE_URL, AERIAL_VIEW_API_URL, GOOGLE_MAPS_API_KEY } from '../config/api';
@@ -57,7 +57,7 @@ export const AerialViewScreen: React.FC<AerialViewScreenProps> = ({ navigation, 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [videoLoading, setVideoLoading] = useState<{ [key: number]: boolean }>({});
-
+    const [cityCenter, setCityCenter] = useState<{ lat: number; lng: number } | null>(null);
     useEffect(() => {
         fetchGeocodedLocations();
     }, []);
@@ -86,6 +86,9 @@ export const AerialViewScreen: React.FC<AerialViewScreenProps> = ({ navigation, 
 
             const data = await response.json();
             setEvents(data.events);
+            if (data.center) {
+                setCityCenter(data.center);
+            }
             setLoading(false);
 
             // Fetch aerial videos for each location
@@ -174,14 +177,69 @@ export const AerialViewScreen: React.FC<AerialViewScreenProps> = ({ navigation, 
 
     const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
-    const getStaticMapUrl = (lat: number, lng: number) => {
-        return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=18&size=400x400&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
+    // Generate HTML for 3D Maps JS WebView
+    const get3DMapHtml = (lat: number, lng: number, title: string) => {
+        return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        * { margin: 0; padding: 0; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
+        gmp-map-3d { width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+    <gmp-map-3d
+        id="map3d"
+        center="${lat},${lng},200"
+        tilt="67"
+        heading="0"
+        range="800"
+        mode="HYBRID">
+    </gmp-map-3d>
+
+    <script>
+        (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=\`https://maps.\${c}apis.com/maps/api/js?\`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})
+        ({key: "${GOOGLE_MAPS_API_KEY}", v: "beta", libraries: "maps3d"});
+
+        async function init() {
+            await google.maps.importLibrary('maps3d');
+            const map3d = document.getElementById('map3d');
+            
+            // Wait for map to be ready
+            setTimeout(() => {
+                if (map3d && map3d.flyCameraAround) {
+                    map3d.flyCameraAround({
+                        camera: {
+                            center: { lat: ${lat}, lng: ${lng}, altitude: 100 },
+                            range: 600,
+                            tilt: 65,
+                            heading: 0
+                        },
+                        durationMillis: 20000,
+                        rounds: 1
+                    });
+                }
+            }, 2000);
+        }
+        
+        init();
+    </script>
+</body>
+</html>`;
     };
 
     const renderVideoItem = ({ item, index }: { item: GeocodedEvent; index: number }) => {
         const video = aerialVideos[index];
         const isLoading = videoLoading[index];
         const videoUri = video?.portraitUri || video?.landscapeUri;
+        const isCurrentSlide = index === currentIndex;
+        
+        // Use item coordinates, or fall back to city center
+        const lat = item.lat ?? cityCenter?.lat;
+        const lng = item.lng ?? cityCenter?.lng;
 
         return (
             <View style={styles.videoContainer}>
@@ -197,30 +255,30 @@ export const AerialViewScreen: React.FC<AerialViewScreenProps> = ({ navigation, 
                         style={styles.video}
                         resizeMode={ResizeMode.COVER}
                         isLooping
-                        shouldPlay={index === currentIndex}
+                        shouldPlay={isCurrentSlide}
                         isMuted={false}
                         volume={0.5}
                     />
+                ) : lat && lng ? (
+                    <WebView
+                        style={styles.webview}
+                        source={{ html: get3DMapHtml(lat, lng, item.title) }}
+                        scrollEnabled={false}
+                        bounces={false}
+                        javaScriptEnabled={true}
+                        domStorageEnabled={true}
+                        startInLoadingState={true}
+                        renderLoading={() => (
+                            <View style={styles.webviewLoading}>
+                                <ActivityIndicator size="large" color={colors.primary} />
+                                <Text style={styles.placeholderText}>Loading 3D view...</Text>
+                            </View>
+                        )}
+                    />
                 ) : (
                     <View style={styles.placeholderContainer}>
-                        {item.lat && item.lng ? (
-                            <Image
-                                source={{ uri: getStaticMapUrl(item.lat, item.lng) }}
-                                style={styles.staticMapImage}
-                                resizeMode="cover"
-                            />
-                        ) : null}
-                        <View style={styles.noVideoOverlay}>
-                            <Text style={styles.noVideoIcon}>🛰️</Text>
-                            <Text style={styles.noVideoText}>
-                                {video?.state === 'PROCESSING'
-                                    ? 'Aerial video is being generated...'
-                                    : 'Aerial view not available'}
-                            </Text>
-                            <Text style={styles.noVideoSubtext}>
-                                Showing satellite view
-                            </Text>
-                        </View>
+                        <Text style={styles.noVideoIcon}>📍</Text>
+                        <Text style={styles.noVideoText}>Location not available</Text>
                     </View>
                 )}
 
@@ -453,6 +511,20 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
     },
+    webview: {
+        flex: 1,
+        backgroundColor: '#000',
+    },
+    webviewLoading: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#1a1a1a',
+    },
     placeholderContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -463,18 +535,6 @@ const styles = StyleSheet.create({
         marginTop: 16,
         fontSize: 16,
         color: '#888',
-    },
-    staticMapImage: {
-        position: 'absolute',
-        width: '100%',
-        height: '100%',
-        opacity: 0.7,
-    },
-    noVideoOverlay: {
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        padding: 24,
-        borderRadius: 16,
-        alignItems: 'center',
     },
     noVideoIcon: {
         fontSize: 48,
