@@ -1231,3 +1231,235 @@ API_PORT=8000
 - **Agent Seeds**: Keep seed phrases consistent for reproducible addresses
 - **Error States**: Always have fallback UI for API failures
 - **Loading States**: Show progress during agent processing (can take 5-15 seconds)
+
+
+
+
+
+
+from datetime import datetime
+from uuid import uuid4
+from openai import OpenAI
+from uagents import Context, Protocol, Agent
+from uagents_core.contrib.protocols.chat import (
+    ChatAcknowledgement,
+    ChatMessage,
+    EndSessionContent,
+    TextContent,
+    chat_protocol_spec,
+)
+import httpx
+
+# ASI-1 client for natural language processing
+client = OpenAI(
+    base_url='https://api.asi1.ai/v1',
+    api_key=
+)
+# SerpAPI key for event search
+SERPAPI_KEY = 
+
+agent = Agent()
+protocol = Protocol(spec=chat_protocol_spec)
+
+def search_events(query: str) -> list:
+    """Search for events using SerpAPI"""
+    try:
+        params = {
+            "api_key": SERPAPI_KEY,
+            "engine": "google_events",
+            "q": query,
+            "hl": "en",
+            "gl": "us"
+        }
+        response = httpx.get("https://serpapi.com/search", params=params, timeout=30)
+        data = response.json()
+        return data.get("events_results", [])[:5]
+    except Exception as e:
+        return []
+
+def format_events(events: list) -> str:
+    """Format events for display"""
+    if not events:
+        return "Sorry, I couldn't find any events matching your criteria."
+    
+    result = "🎉 Events Found:\n\n"
+    for i, event in enumerate(events, 1):
+        title = event.get("title", "Untitled Event")
+        date_info = event.get("date", {})
+        when = date_info.get("when", "Date TBD") if isinstance(date_info, dict) else str(date_info)
+        address = event.get("address", ["Location TBD"])
+        address_str = ", ".join(address) if isinstance(address, list) else str(address)
+        
+        result += f"{i}. {title}\n"
+        result += f"   Date: {when}\n"
+        result += f"   Location: {address_str}\n\n"
+    
+    return result
+
+@protocol.on_message(ChatMessage)
+async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
+    ctx.logger.info("Received message, starting to process...")
+    
+    await ctx.send(
+        sender,
+        ChatAcknowledgement(timestamp=datetime.now(), acknowledged_msg_id=msg.msg_id),
+    )
+    
+    text = ''
+    for item in msg.content:
+        if isinstance(item, TextContent):
+            text += item.text
+    
+    ctx.logger.info(f"User message: {text}")
+    
+    try:
+        # Use LLM to extract search query
+        ctx.logger.info("Calling ASI-1 to parse query...")
+        r = client.chat.completions.create(
+            model="asi1-mini",
+            messages=[
+                {"role": "system", "content": """
+                    You are an event search assistant. Extract the city and event type from the user's message.
+                    Return ONLY the search query in format: "events in [city] [event type]"
+                    Example: "events in Boston concerts" or "events in New York food festivals"
+                """},
+                {"role": "user", "content": text},
+            ],
+            max_tokens=100,
+        )
+        search_query = str(r.choices[0].message.content)
+        ctx.logger.info(f"Search query: {search_query}")
+        
+        # Search for events
+        ctx.logger.info("Calling SerpAPI...")
+        events = search_events(search_query)
+        ctx.logger.info(f"Found {len(events)} events")
+        
+        response = format_events(events)
+        
+    except Exception as e:
+        ctx.logger.error(f"Error: {str(e)}")
+        response = f"Sorry, I encountered an error: {str(e)}"
+    
+    await ctx.send(sender, ChatMessage(
+        timestamp=datetime.utcnow(),
+        msg_id=uuid4(),
+        content=[
+            TextContent(type="text", text=response),
+            EndSessionContent(type="end-session"),
+        ]
+    ))
+
+@protocol.on_message(ChatAcknowledgement)
+async def handle_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
+    pass
+
+agent.include(protocol, publish_manifest=True)
+
+
+________________________________________________
+from datetime import datetime
+from uuid import uuid4
+
+from openai import OpenAI
+from uagents import Context, Protocol, Agent
+from uagents_core.contrib.protocols.chat import (
+    ChatAcknowledgement,
+    ChatMessage,
+    EndSessionContent,
+    StartSessionContent,
+    TextContent,
+    chat_protocol_spec,
+)
+
+##
+### Itinerary Planner Agent for Metropolis
+##
+
+def create_text_chat(text: str, end_session: bool = False) -> ChatMessage:
+    content = [TextContent(type="text", text=text)]
+    if end_session:
+        content.append(EndSessionContent(type="end-session"))
+    return ChatMessage(timestamp=datetime.utcnow(), msg_id=uuid4(), content=content)
+
+# ASI-1 client for itinerary planning
+client = OpenAI(
+    base_url='https://api.asi1.ai/v1',
+    api_key=
+)
+
+agent = Agent()
+protocol = Protocol(spec=chat_protocol_spec)
+
+@protocol.on_message(ChatMessage)
+async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
+    await ctx.send(
+        sender,
+        ChatAcknowledgement(timestamp=datetime.now(), acknowledged_msg_id=msg.msg_id),
+    )
+
+    # Greet if session starts
+    if any(isinstance(item, StartSessionContent) for item in msg.content):
+        await ctx.send(
+            sender,
+            create_text_chat("Hi! I'm your Itinerary Planner. Send me a list of events and I'll create an optimized schedule for your day!", end_session=False),
+        )
+
+    text = msg.text()
+    if not text:
+        return
+
+    ctx.logger.info(f"Planning itinerary for: {text}")
+
+    try:
+        r = client.chat.completions.create(
+            model="asi1-mini",
+            messages=[
+                {"role": "system", "content": """You are an expert itinerary planner for city exploration. Given events and preferences, create an optimized day schedule.
+
+Rules:
+1. Consider realistic travel times between venues (15-30 min)
+2. Include meal breaks (lunch 12-1pm, dinner 6-7pm)
+3. Don't overlap events
+4. Respect the user's budget if mentioned
+5. Start day around 9-10am, end by 10-11pm
+
+Format your response clearly:
+
+📅 YOUR ITINERARY FOR [CITY]
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+🕘 9:00 AM - [EVENT NAME]
+   📍 [Location]
+   💰 $[Cost]
+   ⏱️ [Duration]
+   
+🕐 [NEXT TIME] - [NEXT EVENT]
+   ...
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+💵 TOTAL ESTIMATED COST: $XX
+🚶 TOTAL TRAVEL TIME: XX min
+✨ TIPS: [Any helpful suggestions]
+
+If no events are provided, ask the user for: city, date, events or preferences, and budget."""},
+                {"role": "user", "content": text},
+            ],
+            max_tokens=1500,
+        )
+
+        response = str(r.choices[0].message.content)
+        ctx.logger.info("Itinerary created successfully")
+        
+    except Exception as e:
+        ctx.logger.exception('Error creating itinerary')
+        response = f"Sorry, I encountered an error while planning your itinerary: {e}"
+
+    await ctx.send(sender, create_text_chat(response, end_session=True))
+
+
+@protocol.on_message(ChatAcknowledgement)
+async def handle_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
+    pass
+
+agent.include(protocol, publish_manifest=True)
