@@ -168,6 +168,11 @@ export const DatePickerScreen: React.FC<DatePickerScreenProps> = ({ navigation, 
                 selectedMonth === today.getMonth() &&
                 selectedYear === today.getFullYear();
 
+            // Check if this date is in the past
+            const currentDate = new Date(selectedYear, selectedMonth, day);
+            const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const isPastDate = currentDate < todayStart;
+
             days.push(
                 <TouchableOpacity
                     key={day}
@@ -175,14 +180,17 @@ export const DatePickerScreen: React.FC<DatePickerScreenProps> = ({ navigation, 
                         styles.dayCell,
                         isSelected && styles.selectedDayCell,
                         isToday && !isSelected && styles.todayCell,
+                        isPastDate && styles.pastDayCell,
                     ]}
-                    onPress={() => handleDateSelect(day)}
+                    onPress={() => !isPastDate && handleDateSelect(day)}
+                    disabled={isPastDate}
                 >
                     <Text
                         style={[
                             styles.dayText,
                             isSelected && styles.selectedDayText,
                             isToday && !isSelected && styles.todayText,
+                            isPastDate && styles.pastDayText,
                         ]}
                     >
                         {day}
@@ -448,6 +456,12 @@ const styles = StyleSheet.create({
     todayText: {
         color: colors.primary,
         fontWeight: '700',
+    },
+    pastDayCell: {
+        opacity: 0.4,
+    },
+    pastDayText: {
+        color: colors.disabled,
     },
     skylineContainer: {
         position: 'absolute',
