@@ -5,6 +5,7 @@ import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { CitySelectionScreen } from './src/screens/CitySelectionScreen';
 import { BudgetScreen } from './src/screens/BudgetScreen';
 import { DatePickerScreen } from './src/screens/DatePickerScreen';
+import { PreferencesScreen } from './src/screens/PreferencesScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -21,6 +22,7 @@ export default function App() {
                 <Stack.Screen name="CitySelection" component={CitySelectionScreen} />
                 <Stack.Screen name="Budget" component={BudgetScreen} />
                 <Stack.Screen name="DatePicker" component={DatePickerScreen} />
+                <Stack.Screen name="Preferences" component={PreferencesScreen} />
             </Stack.Navigator>
         </NavigationContainer>
     );
